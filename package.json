@@ -1,0 +1,33 @@
+{
+  "name": "community-project-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "run": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aryan-bhagat13h/community-project-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Aryan-bhagat13h/community-project-backend/issues"
+  },
+  "homepage": "https://github.com/Aryan-bhagat13h/community-project-backend#readme",
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.10.3",
+    "nodemailer": "^10.0.12",
+    "nodemon": "^3.1.14"
+  }
+}
