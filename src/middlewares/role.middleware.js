@@ -1,19 +1,18 @@
-export const restrictTo = (...roles) => {
-  return (req, res, next) => {
+import { ApiError } from "../utils/api-error.js";
+
+export const authorizeRoles =
+  (...allowedRoles) =>
+  (req, _res, next) => {
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized request",
-      });
+      throw new ApiError(401, "Unauthorized request");
     }
-
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: "You do not have permission to perform this action",
-      });
+    if (!allowedRoles.includes(req.user.role)) {
+      throw new ApiError(403, `Access restricted to: ${allowedRoles.join(", ")}`);
     }
-
     next();
   };
-};
+
+export const restrictedToStudent = authorizeRoles("student");
+export const restrictedToFaculty = authorizeRoles("faculty");
+export const restrictedToReporter = authorizeRoles("reporter");
+export const restrictedToAdmin = authorizeRoles("admin");

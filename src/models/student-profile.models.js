@@ -5,38 +5,22 @@ const studentProfileSchema = new Schema(
     studentId: {
       type: String,
       trim: true,
+      unique: true,
+      sparse: true,
     },
 
-    college: {
-      type: String,
-      trim: true,
-    },
+    college: { type: String, trim: true },
+    department: { type: String, trim: true },
+    degree: { type: String, trim: true },
 
-    department: {
-      type: String,
-      trim: true,
-    },
-
-    degree: {
-      type: String,
-      trim: true,
-    },
-
-    currentYear: {
-      type: Number,
-    },
-
-    currentSemester: {
-      type: Number,
-    },
-
-    graduationYear: {
-      type: Number,
-    },
+    currentYear: { type: Number, min: 1, max: 8 },
+    currentSemester: { type: Number, min: 1, max: 16 },
+    graduationYear: { type: Number, min: 2000, max: 2100 },
 
     skills: [
       {
-        name: String,
+        _id: false,
+        name: { type: String, trim: true },
         level: {
           type: String,
           enum: ["beginner", "intermediate", "advanced"],
@@ -45,30 +29,14 @@ const studentProfileSchema = new Schema(
     ],
 
     interests: [String],
-
     researchInterests: [String],
-
     preferredDomains: [String],
 
-    github: {
-      type: String,
-      trim: true,
-    },
-
-    linkedin: {
-      type: String,
-      trim: true,
-    },
-
-    portfolio: {
-      type: String,
-      trim: true,
-    },
+    github: { type: String, trim: true },
+    linkedin: { type: String, trim: true },
+    portfolio: { type: String, trim: true },
   },
   { timestamps: true }
 );
 
-export const StudentProfile = mongoose.model(
-  "StudentProfile",
-  studentProfileSchema
-);
+export const StudentProfile = mongoose.model("StudentProfile", studentProfileSchema);

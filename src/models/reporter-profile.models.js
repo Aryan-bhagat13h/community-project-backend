@@ -25,61 +25,42 @@ const reporterProfileSchema = new Schema(
     organizationName: {
       type: String,
       trim: true,
+      required: [
+        function () {
+          return this.reporterType !== "citizen";
+        },
+        "Organization name is required for this reporter type",
+      ],
     },
 
-    organizationType: {
-      type: String,
-      trim: true,
-    },
-
-    contactPerson: {
-      type: String,
-      trim: true,
-    },
-
-    designation: {
-      type: String,
-      trim: true,
-    },
+    contactPerson: { type: String, trim: true },
+    designation: { type: String, trim: true },
 
     organizationEmail: {
       type: String,
       lowercase: true,
       trim: true,
+      match: [/^\S+@\S+\.\S+$/, "Invalid organization email"],
     },
 
     organizationPhone: {
       type: String,
       trim: true,
+      match: [/^\+?[0-9]{10,15}$/, "Invalid organization phone"],
     },
 
     website: {
       type: String,
       trim: true,
+      match: [/^https?:\/\/\S+$/i, "Invalid website URL"],
     },
 
-    address: {
-      type: String,
-      trim: true,
-    },
+    address: { type: String, trim: true },
+    location: { type: String, trim: true },
 
-    location: {
-      type: String,
-      trim: true,
-    },
+    description: { type: String, trim: true, maxlength: 1000 },
 
-    description: {
-      type: String,
-      trim: true,
-      maxlength: 1000,
-    },
-
-    areasOfProblems: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
+    areasOfProblems: [{ type: String, trim: true }],
 
     preferredCommunication: {
       type: String,
@@ -89,19 +70,21 @@ const reporterProfileSchema = new Schema(
 
     verificationDocuments: [
       {
-        type: String, // Cloudinary URLs
+        _id: false,
+        url: String,
+        publicId: String,
       },
     ],
 
-    isVerified: {
-      type: Boolean,
-      default: false,
+    verificationStatus: {
+      type: String,
+      enum: ["pending", "verified", "rejected"],
+      default: "pending",
     },
+    verifiedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    verifiedAt: { type: Date },
   },
   { timestamps: true }
 );
 
-export const ReporterProfile = mongoose.model(
-  "ReporterProfile",
-  reporterProfileSchema
-);
+export const ReporterProfile = mongoose.model("ReporterProfile", reporterProfileSchema);

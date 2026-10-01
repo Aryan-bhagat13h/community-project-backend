@@ -1,98 +1,45 @@
 import mongoose, { Schema } from "mongoose";
 
+const urlRegex = /^https?:\/\/\S+$/i;
+const stringList = [{ type: String, trim: true }];
+
 const facultyProfileSchema = new Schema(
   {
     facultyId: {
       type: String,
       trim: true,
+      unique: true,
+      sparse: true,
     },
 
-    institution: {
+    institution: { type: String, required: true, trim: true },
+    department: { type: String, trim: true },
+    designation: { type: String, trim: true },
+
+    qualifications: stringList,
+    expertise: stringList,
+    researchInterests: stringList,
+    subjects: stringList,
+    mentorshipAreas: stringList,
+
+    experience: { type: Number, min: 0, max: 60 }, 
+
+    availability: { type: String, trim: true, maxlength: 200 },
+
+    maxTeams: { type: Number, min: 0, max: 50, default: 5 },
+
+    linkedin: { type: String, trim: true, match: [urlRegex, "Invalid LinkedIn URL"] },
+    profileUrl: { type: String, trim: true, match: [urlRegex, "Invalid profile URL"] },
+
+    verificationStatus: {
       type: String,
-      required: true,
-      trim: true,
+      enum: ["pending", "verified", "rejected"],
+      default: "pending",
     },
-
-    department: {
-      type: String,
-      trim: true,
-    },
-
-    designation: {
-      type: String,
-      trim: true,
-    },
-
-    qualifications: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
-
-    expertise: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
-
-    researchInterests: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
-
-    subjects: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
-
-    experience: {
-      type: Number,
-      min: 0,
-    },
-
-    mentorshipAreas: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
-
-    availability: {
-      type: String,
-      trim: true,
-    },
-
-    maxTeams: {
-      type: Number,
-      min: 0,
-      default: 5,
-    },
-
-    linkedin: {
-      type: String,
-      trim: true,
-    },
-
-    profileUrl: {
-      type: String,
-      trim: true,
-    },
-
-    isVerified: {
-      type: Boolean,
-      default: false,
-    },
+    verifiedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    verifiedAt: { type: Date },
   },
   { timestamps: true }
 );
 
-export const FacultyProfile = mongoose.model(
-  "FacultyProfile",
-  facultyProfileSchema
-);
+export const FacultyProfile = mongoose.model("FacultyProfile", facultyProfileSchema);
