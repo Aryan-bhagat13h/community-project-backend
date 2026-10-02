@@ -1,12 +1,12 @@
 import { Router } from "express";
 import {
   createProfile, editProfile, updateProfilePhoto,
-} from "../controllers/profile.controllers.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+} from '../controllers/profile.controller.js'
+import { verifyJwt } from "../middlewares/auth.middlerware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
-router.use(verifyJWT);
+router.use(verifyJwt);
 
 const photoUpload = upload.fields([{ name: "profilePhoto", maxCount: 1 }]);
 

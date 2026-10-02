@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { createFacultyProfile } from "../controllers/faculty-profile.controllers.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { createFacultyProfile } from '../controllers/faculty-profile.controller.js';
+import { verifyJwt } from '../middlewares/auth.middlerware.js';
 import { restrictedToFaculty } from "../middlewares/role.middleware.js";
 
 const router = Router();
-router.use(verifyJWT, restrictedToFaculty);
+router.use(verifyJwt, restrictedToFaculty);
 
 router.post("/", createFacultyProfile);
 

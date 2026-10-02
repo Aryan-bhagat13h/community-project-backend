@@ -1,9 +1,9 @@
 import { asyncHandler } from "../utils/async-handler.js";
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
-import { Profile } from "../models/profile.models.js";
-import { StudentProfile } from "../models/studentProfile.models.js"; 
-import { ROLE_PROFILE_MODEL } from "../utils/role-profile.js";
+import { Profile } from '../models/profile.models.js'
+import {StudentProfile} from '../models/student-profile.models.js'
+import { ROLE_PROFILE_MODEL } from "../models/role-profile.models.js"
 
 const optionalString = (v) => (v === undefined ? undefined : String(v).trim());
 

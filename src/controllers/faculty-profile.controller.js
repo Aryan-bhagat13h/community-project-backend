@@ -1,9 +1,9 @@
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { asyncHandler } from "../utils/async-handler.js";
-import { Profile } from "../models/profile.models.js";
-import { FacultyProfile } from "../models/facultyProfile.models.js"; 
-import { ROLE_PROFILE_MODEL } from "../utils/role-profile.js";
+import { Profile } from '../models/profile.models.js';
+import { FacultyProfile } from '../models/faculty-profile.models.js'; 
+import { ROLE_PROFILE_MODEL } from '../models/role-profile.models.js';
 
 const optionalString = (v) => (v === undefined ? undefined : String(v).trim());
 
