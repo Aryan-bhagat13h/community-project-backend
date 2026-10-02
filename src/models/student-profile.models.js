@@ -13,8 +13,8 @@ const studentProfileSchema = new Schema(
     department: { type: String, trim: true },
     degree: { type: String, trim: true },
 
-    currentYear: { type: Number, min: 1, max: 8 },
-    currentSemester: { type: Number, min: 1, max: 16 },
+    currentYear: { type: Number, min: 1, max: 4 },
+    currentSemester: { type: Number, min: 1, max: 8 },
     graduationYear: { type: Number, min: 2000, max: 2100 },
 
     skills: [

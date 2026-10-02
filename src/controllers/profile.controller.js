@@ -15,7 +15,6 @@ const createProfile = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Phone is required");
   }
 
-
   const existingProfile = await Profile.findOne({ user: req.user._id });
   if (existingProfile) {
     throw new ApiError(409, "Profile already exists for this user");
@@ -33,7 +32,7 @@ const createProfile = asyncHandler(async (req, res) => {
   }
 
   const profile = await Profile.create({
-    user: req.user._id, 
+    user: req.user._id,
     phone: phone.trim(),
     bio: bio?.trim(),
     profilePhoto: photoUrl,
@@ -44,4 +43,72 @@ const createProfile = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, profile, "Profile created successfully"));
 });
 
-export { createProfile };
+const editProfile = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const updatedFields = {};
+
+  if (req.body.phone !== undefined) {
+    const phone = String(req.body.phone).trim();
+    if (!phone) {
+      throw new ApiError(400, "Phone cannot be empty");
+    }
+    updatedFields.phone = phone;
+  }
+
+  if (req.body.bio !== undefined) {
+    updatedFields.bio = String(req.body.bio).trim();
+  }
+
+  if (Object.keys(updatedFields).length === 0) {
+    throw new ApiError(400, "Provide at least one field to update (phone, bio)");
+  }
+
+
+  const profile = await Profile.findOneAndUpdate(
+    { user: req.user._id },
+    { $set: updatedFields },
+    { new: true, runValidators: true } 
+  );
+
+  if (!profile) {
+    throw new ApiError(404, "Profile not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, profile, "Profile updated successfully"));
+});
+
+const updateProfilePhoto = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const profilePhotoLocalPath = req.files?.profilePhoto?.[0]?.path;
+  if (!profilePhotoLocalPath) {
+    throw new ApiError(400, "Photo is required");
+  }
+
+  const profile = await Profile.findOne({ user: req.user._id });
+  if (!profile) {
+    throw new ApiError(404, "Profile not found");
+  }
+
+  const uploaded = await uploadOnCloudinary(profilePhotoLocalPath);
+  const photoUrl = uploaded?.secure_url || uploaded?.url;
+  if (!photoUrl) {
+    throw new ApiError(500, "Error occurred while uploading the photo");
+  }
+
+  profile.profilePhoto = photoUrl;
+  await profile.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, profile, "Profile photo updated successfully"));
+});
+
+export { createProfile, editProfile, updateProfilePhoto };
