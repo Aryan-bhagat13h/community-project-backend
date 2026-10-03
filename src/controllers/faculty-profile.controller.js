@@ -85,4 +85,91 @@ const createFacultyProfile = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, facultyProfile, "Faculty profile created successfully"));
 });
 
-export { createFacultyProfile };
+const updateFacultyProfile = asyncHandler(async(req, res) => {
+  if(!req.user?._id){
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const profile = await Profile.findOne({user: req.user._id});
+
+  if(!profile){
+    throw new ApiError(404, "Profile not found");
+  }
+
+  if(!profile.roleProfile || profile.roleProfileModel !== ROLE_PROFILE_MODEL.faculty){
+      throw new ApiError(404, "Faculty profile not found")
+    }
+
+    const {
+    facultyId, institution, department, designation,
+    qualifications, expertise, researchInterests, subjects, mentorshipAreas,
+    experience, availability, maxTeams, linkedin, profileUrl,
+  } = req.body;
+
+  const updatedFields = {};
+
+  if(!institution || institution === ""){
+    throw new ApiError(400, "Institution cannot be empty")
+  }
+
+  updatedFields.institution = institution.trim();
+
+  const optionalStrings = { facultyId, linkedin, profileUrl, department, designation};
+
+  for(const [field, value] of Object.entries(optionalStrings)){
+    if(value !== undefined){
+      updatedFields[field] = optionalString(value);
+    }
+  }
+
+  const numbers = { experience, maxTeams};
+  for(const [field, value] of Object.entries(numbers)){
+    if(value !== undefined){
+      updatedFields[field] = optionalNumber(value, field);
+    }
+  }
+
+  if(qualifications !== undefined){
+    updatedFields.qualifications = toStringList(updatedFields);
+  }
+  if(expertise !== undefined){
+    updatedFields.expertise = toStringList(updatedFields);
+  }
+  if(researchInterests !== undefined){
+    updatedFields.researchInterests = toStringList(updatedFields);
+  }
+  if(subjects !== undefined){
+    updatedFields.subjects = toStringList(updatedFields);
+  }
+  if(mentorshipAreas !== undefined){
+    updatedFields.mentorshipAreas = toStringList(updatedFields);
+  }
+
+  if(Object.keys(updatedFields).length === 0){
+    throw new ApiError(400, "Provide at least one field to update");
+  }
+
+  let facultyProfile;
+  try{
+    facultyProfile = await FacultyProfile.findByIdAndUpdate(
+      profile.roleProfile,
+      { $set: updatedFields},
+      { new: true, runValidators: true}
+    );
+  } catch(err){
+    if(err.code = 11000){
+      throw new ApiError(409, "This facultyId is already in use");
+    }
+    throw err;
+  }
+
+  if(!facultyProfile){
+    throw new ApiError(404, "Faculty profile not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, facultyProfile, "Faculty profile updated succwssfully"));
+})
+
+export { createFacultyProfile, updateFacultyProfile };
