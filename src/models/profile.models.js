@@ -11,7 +11,6 @@ const profileSchema = new Schema(
 
     name: {
       type: String,
-      required: true,
       trim: true,
     },
 
@@ -29,6 +28,16 @@ const profileSchema = new Schema(
       type: String,
       trim: true,
       maxlength: 500,
+    },
+
+    roleProfile: {
+      type: Schema.Types.ObjectId,
+      refPath: "roleProfileModel",
+    },
+
+    roleProfileModel: {
+      type: String,
+      enum: ["StudentProfile", "FacultyProfile", "ReporterProfile", "AdminProfile"],
     },
 
     student_profile: {

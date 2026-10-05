@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import { asyncHandler } from "../utils/async-handler.js";
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
-import { User, hashToken } from '../models/user.mdoels.js'
+import { User, hashToken } from '../models/user.models.js'
 
 const cookieOptions = {
   httpOnly: true,

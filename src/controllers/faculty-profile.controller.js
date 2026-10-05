@@ -85,22 +85,22 @@ const createFacultyProfile = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, facultyProfile, "Faculty profile created successfully"));
 });
 
-const updateFacultyProfile = asyncHandler(async(req, res) => {
-  if(!req.user?._id){
-    throw new ApiError(401, "Unauthorised access");
+const updateFacultyProfile = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
   }
 
-  const profile = await Profile.findOne({user: req.user._id});
+  const profile = await Profile.findOne({ user: req.user._id });
 
-  if(!profile){
+  if (!profile) {
     throw new ApiError(404, "Profile not found");
   }
 
-  if(!profile.roleProfile || profile.roleProfileModel !== ROLE_PROFILE_MODEL.faculty){
-      throw new ApiError(404, "Faculty profile not found")
-    }
+  if (!profile.roleProfile || profile.roleProfileModel !== ROLE_PROFILE_MODEL.faculty) {
+    throw new ApiError(404, "Faculty profile not found");
+  }
 
-    const {
+  const {
     facultyId, institution, department, designation,
     qualifications, expertise, researchInterests, subjects, mentorshipAreas,
     experience, availability, maxTeams, linkedin, profileUrl,
@@ -108,68 +108,70 @@ const updateFacultyProfile = asyncHandler(async(req, res) => {
 
   const updatedFields = {};
 
-  if(!institution || institution === ""){
-    throw new ApiError(400, "Institution cannot be empty")
+  if (institution !== undefined) {
+    const inst = String(institution).trim();
+    if (!inst) {
+      throw new ApiError(400, "Institution cannot be empty");
+    }
+    updatedFields.institution = inst;
   }
 
-  updatedFields.institution = institution.trim();
+  const optionalStrings = { facultyId, linkedin, profileUrl, department, designation, availability };
 
-  const optionalStrings = { facultyId, linkedin, profileUrl, department, designation};
-
-  for(const [field, value] of Object.entries(optionalStrings)){
-    if(value !== undefined){
+  for (const [field, value] of Object.entries(optionalStrings)) {
+    if (value !== undefined) {
       updatedFields[field] = optionalString(value);
     }
   }
 
-  const numbers = { experience, maxTeams};
-  for(const [field, value] of Object.entries(numbers)){
-    if(value !== undefined){
+  const numbers = { experience, maxTeams };
+  for (const [field, value] of Object.entries(numbers)) {
+    if (value !== undefined) {
       updatedFields[field] = optionalNumber(value, field);
     }
   }
 
-  if(qualifications !== undefined){
-    updatedFields.qualifications = toStringList(updatedFields);
+  if (qualifications !== undefined) {
+    updatedFields.qualifications = toStringList(qualifications);
   }
-  if(expertise !== undefined){
-    updatedFields.expertise = toStringList(updatedFields);
+  if (expertise !== undefined) {
+    updatedFields.expertise = toStringList(expertise);
   }
-  if(researchInterests !== undefined){
-    updatedFields.researchInterests = toStringList(updatedFields);
+  if (researchInterests !== undefined) {
+    updatedFields.researchInterests = toStringList(researchInterests);
   }
-  if(subjects !== undefined){
-    updatedFields.subjects = toStringList(updatedFields);
+  if (subjects !== undefined) {
+    updatedFields.subjects = toStringList(subjects);
   }
-  if(mentorshipAreas !== undefined){
-    updatedFields.mentorshipAreas = toStringList(updatedFields);
+  if (mentorshipAreas !== undefined) {
+    updatedFields.mentorshipAreas = toStringList(mentorshipAreas);
   }
 
-  if(Object.keys(updatedFields).length === 0){
+  if (Object.keys(updatedFields).length === 0) {
     throw new ApiError(400, "Provide at least one field to update");
   }
 
   let facultyProfile;
-  try{
+  try {
     facultyProfile = await FacultyProfile.findByIdAndUpdate(
       profile.roleProfile,
-      { $set: updatedFields},
-      { new: true, runValidators: true}
+      { $set: updatedFields },
+      { new: true, runValidators: true }
     );
-  } catch(err){
-    if(err.code = 11000){
+  } catch (err) {
+    if (err.code === 11000) {
       throw new ApiError(409, "This facultyId is already in use");
     }
     throw err;
   }
 
-  if(!facultyProfile){
+  if (!facultyProfile) {
     throw new ApiError(404, "Faculty profile not found");
   }
 
   return res
     .status(200)
-    .json(new ApiResponse(200, facultyProfile, "Faculty profile updated succwssfully"));
-})
+    .json(new ApiResponse(200, facultyProfile, "Faculty profile updated successfully"));
+});
 
 export { createFacultyProfile, updateFacultyProfile };

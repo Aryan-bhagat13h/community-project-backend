@@ -9,7 +9,7 @@ const createProfile = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Unauthorized access");
   }
 
-  const { phone, bio } = req.body;
+  const { phone, bio, name } = req.body;
 
   if (!phone || String(phone).trim() === "") {
     throw new ApiError(400, "Phone is required");
@@ -33,6 +33,7 @@ const createProfile = asyncHandler(async (req, res) => {
 
   const profile = await Profile.create({
     user: req.user._id,
+    name: name?.trim() || req.user.fullname,
     phone: phone.trim(),
     bio: bio?.trim(),
     profilePhoto: photoUrl,
@@ -41,6 +42,24 @@ const createProfile = asyncHandler(async (req, res) => {
   return res
     .status(201)
     .json(new ApiResponse(201, profile, "Profile created successfully"));
+});
+
+const getProfile = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const profile = await Profile.findOne({ user: req.user._id })
+    .populate("user", "fullname email username role")
+    .populate("roleProfile");
+
+  if (!profile) {
+    throw new ApiError(404, "Profile not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, profile, "Profile fetched successfully"));
 });
 
 const editProfile = asyncHandler(async (req, res) => {
@@ -111,4 +130,4 @@ const updateProfilePhoto = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, profile, "Profile photo updated successfully"));
 });
 
-export { createProfile, editProfile, updateProfilePhoto };
+export { createProfile, editProfile, updateProfilePhoto, getProfile };

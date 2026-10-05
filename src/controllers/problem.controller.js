@@ -21,8 +21,19 @@ const optionalNumber = (v, field) => {
 };
 
 const toStringList = (v) => {
-  const arr = Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : [];
-  return arr.map((i) => String(i).trim()).filter(Boolean);
+  if (v === undefined || v === null || v === "") return [];
+  if (Array.isArray(v)) return v.map((i) => String(i).trim()).filter(Boolean);
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) {
+        return parsed.map((i) => String(i).trim()).filter(Boolean);
+      }
+    } catch {
+    }
+    return v.split(",").map((i) => String(i).trim()).filter(Boolean);
+  }
+  return [];
 };
 
 const toTextList = (v) => {
