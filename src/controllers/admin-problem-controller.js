@@ -167,4 +167,41 @@ const getAllProblems = asyncHandler(async (req, res) => {
   );
 });
 
+const SEVERITY_LEVELS = ["low", "moderate", "high", "critical"];
+const URGENCY_LEVELS = ["low", "moderate", "urgent", "emergency"];
+
+const setSeverityUrgency = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { problemId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(problemId)) {
+    throw new ApiError(400, "Invalid problem id");
+  }
+
+  const { severity, urgency } = req.body ?? {};
+
+  if (typeof severity !== "string" || !SEVERITY_LEVELS.includes(severity.trim())) {
+    throw new ApiError(400, `severity must be one of: ${SEVERITY_LEVELS.join(", ")}`);
+  }
+  if (typeof urgency !== "string" || !URGENCY_LEVELS.includes(urgency.trim())) {
+    throw new ApiError(400, `urgency must be one of: ${URGENCY_LEVELS.join(", ")}`);
+  }
+
+  const problem = await Problem.findOneAndUpdate(
+    { _id: problemId, isDeleted: false },
+    { $set: { severity: severity.trim(), urgency: urgency.trim() } },
+    { new: true, runValidators: true }
+  );
+
+  if (!problem) {
+    throw new ApiError(404, "Problem not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, problem, "Severity and urgency set successfully"));
+});
+
 export { updateVerificationStatus, rejectProblem, getAllProblems };
