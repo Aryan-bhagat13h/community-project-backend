@@ -203,6 +203,36 @@ const problemSchema = new Schema(
       ref: "User",
       required: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false
+    },
+    deletedAt: {
+      type: Date
+    },
+    deletedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User"
+    },
+    deleteReason: {
+      type: String,
+      trim: true
+    },
+    isRejected: {
+      type: Boolean,
+      default: false
+    },
+    rejectedAt: {
+      type: Date
+    },
+    rejectedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User"
+    },
+    rejectionReason: {
+      type: String,
+      trim: true
+    }
   },
   { timestamps: true }
 );
