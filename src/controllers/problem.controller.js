@@ -184,6 +184,29 @@ const registerProblem = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, problem, "Problem registered successfully"));
 });
 
+const trackProblem = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
 
+  const { problemId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(problemId)) {
+    throw new ApiError(400, "Invalid problem id");
+  }
 
-export { registerProblem };
+  const problem = await Problem.findOne({ _id: problemId, isDeleted: false })
+    .select(
+      "title category problemType locationType severity urgency verificationStatus isRejected rejectionReason rejectedAt reportedBy createdAt updatedAt"
+    )
+    .populate("reportedBy", "username fullName")
+    .lean();
+
+  if (!problem) {
+    throw new ApiError(404, "Problem not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, problem, "Problem fetched successfully"));
+});
+export { registerProblem, trackProblem };
