@@ -158,7 +158,7 @@ const problemSchema = new Schema(
       enum: ["low", "moderate", "urgent", "emergency"],
       default: "low",
     },
-    skills: stringList(),
+    skills: stringList(), // AI assessed
     verificationStatus: {
       type: String,
       required: true,
