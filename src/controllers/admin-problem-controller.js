@@ -76,7 +76,7 @@ const rejectProblem = asyncHandler(async (req, res) => {
     { _id: problemId, isDeleted: false },
     {
       $set: {
-        status: "rejected",
+        verificationStatus: "rejected",
         rejectedAt: new Date(),
         rejectedBy: req.user._id,
         rejectionReason: rejectionReason.trim(),
@@ -204,4 +204,4 @@ const setSeverityUrgency = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, problem, "Severity and urgency set successfully"));
 });
 
-export { updateVerificationStatus, rejectProblem, getAllProblems };
+export { updateVerificationStatus, rejectProblem, getAllProblems, setSeverityUrgency };
