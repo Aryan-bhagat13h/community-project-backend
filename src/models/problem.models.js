@@ -232,6 +232,10 @@ const problemSchema = new Schema(
     rejectionReason: {
       type: String,
       trim: true
+    },
+    isAdopted: {
+      type: Boolean, 
+      default: false
     }
   },
   { timestamps: true }

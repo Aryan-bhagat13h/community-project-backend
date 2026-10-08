@@ -2,6 +2,7 @@ import {ApiError} from '../utils/api-error.js';
 import {asyncHandler} from '../utils/async-handler.js';
 import { ApiResponse } from '../utils/api-response.js';
 import { Problem } from '../models/problem.models.js';
+import { SavedProblem } from '../models/saved-problem.models.js';
 const browseProblems = asyncHandler(async (req, res) => {
   if (!req.user?._id) {
     throw new ApiError(401, "Unauthorised access");
@@ -94,4 +95,38 @@ const browseProblems = asyncHandler(async (req, res) => {
   );
 });
 
+const savedProblem = asyncHandler(async(req,res) => {
+  if(!req.user?._id){
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const {problemId} = req.params
+
+  if(!mongoose.Types.ObjectId.isValid(problemId)){
+    throw new ApiError(400, "Invalid problem id");
+  }
+
+  const problem = await Problem.findOne({
+    _id: problemId,
+    isDeleted: false,
+    verificationStatus: "verified"
+  });
+
+   try {
+    await SavedProblem.create({ user: req.user._id, problem: problem._id });
+  } catch (err) {
+    if (err.code === 11000) {
+      throw new ApiError(409, "Problem already saved");
+    }
+    throw err;
+  }
+
+  if(!savedProblem){
+    throw new ApiError(404, "Problem not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, savedProblem, "Problem saved successfully"))
+})
 export {browseProblems}
