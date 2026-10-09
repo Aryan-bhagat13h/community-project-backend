@@ -4,6 +4,7 @@ import { app } from '../src/app.js';
 import { User } from '../src/models/user.models.js';
 import { Profile } from '../src/models/profile.models.js';
 import { AdminProfile } from '../src/models/admin-profile.models.js';
+import { Problem } from '../src/models/problem.models.js';
 
 vi.mock('../src/utils/cloudinary.js', () => ({
   uploadOnCloudinary: vi.fn().mockResolvedValue({
@@ -412,6 +413,226 @@ describe('Community Project Backend API Integration Tests', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data.title).toBe('Water Supply Leakage');
       expect(res.body.data.category).toBe('water');
+    });
+
+    it('should track a problem by ID', async () => {
+      const createRes = await request(app)
+        .post('/api/v1/problems')
+        .set('Cookie', authCookie)
+        .field('title', 'Track Test Problem')
+        .field('description', JSON.stringify(['Description to track']))
+        .field('category', 'education')
+        .field('problemType', 'educational')
+        .field('preferredCommunication', 'email')
+        .field('locationType', 'village')
+        .field('isPopulationAffected', 'false')
+        .field('hasAffectedGroups', 'false')
+        .field('coordinates', JSON.stringify([77.2, 28.6]))
+        .attach('problemPhoto', Buffer.from('fake image data'), 'problem.jpg');
+
+      const problemId = createRes.body.data._id;
+
+      const trackRes = await request(app)
+        .get(`/api/v1/problems/${problemId}`)
+        .set('Cookie', authCookie);
+
+      expect(trackRes.status).toBe(200);
+      expect(trackRes.body.data.title).toBe('Track Test Problem');
+    });
+
+    it('should update and soft-delete a problem', async () => {
+      const createRes = await request(app)
+        .post('/api/v1/problems')
+        .set('Cookie', authCookie)
+        .field('title', 'Edit Test Problem')
+        .field('description', JSON.stringify(['Original description']))
+        .field('category', 'healthcare')
+        .field('problemType', 'social')
+        .field('preferredCommunication', 'email')
+        .field('locationType', 'city')
+        .field('isPopulationAffected', 'false')
+        .field('hasAffectedGroups', 'false')
+        .field('coordinates', JSON.stringify([77.2, 28.6]))
+        .attach('problemPhoto', Buffer.from('fake image data'), 'problem.jpg');
+
+      const problemId = createRes.body.data._id;
+
+      const updateRes = await request(app)
+        .patch(`/api/v1/problems/${problemId}`)
+        .set('Cookie', authCookie)
+        .send({ title: 'Updated Title Problem' });
+
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.data.title).toBe('Updated Title Problem');
+
+      const deleteRes = await request(app)
+        .delete(`/api/v1/problems/${problemId}`)
+        .set('Cookie', authCookie)
+        .send({ deleteReason: 'No longer relevant' });
+
+      expect(deleteRes.status).toBe(200);
+      expect(deleteRes.body.data.isDeleted).toBe(true);
+    });
+  });
+
+  describe('Team Routes (/api/v1/teams)', () => {
+    let leaderCookie = [];
+
+    beforeEach(async () => {
+      await User.create({
+        fullname: 'Team Leader',
+        email: 'leader@example.com',
+        username: 'leader1',
+        password: 'password123',
+        role: 'student',
+      });
+
+      const loginRes = await request(app)
+        .post('/api/v1/users/login')
+        .send({ email: 'leader@example.com', password: 'password123' });
+
+      leaderCookie = loginRes.headers['set-cookie'];
+    });
+
+    it('should create a team successfully', async () => {
+      const res = await request(app)
+        .post('/api/v1/teams')
+        .set('Cookie', leaderCookie)
+        .send({
+          name: 'Innovation Squad',
+          description: 'Working on community solutions',
+          maxMembers: 5,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.name).toBe('Innovation Squad');
+    });
+  });
+
+  describe('Student Problem Browsing & Saving (/api/v1/students/problems)', () => {
+    let studentCookie = [];
+    let testProblem = null;
+
+    beforeEach(async () => {
+      const student = await User.create({
+        fullname: 'Student Browser',
+        email: 'browser@example.com',
+        username: 'browser1',
+        password: 'password123',
+        role: 'student',
+      });
+
+      const loginRes = await request(app)
+        .post('/api/v1/users/login')
+        .send({ email: 'browser@example.com', password: 'password123' });
+
+      studentCookie = loginRes.headers['set-cookie'];
+
+      testProblem = await Problem.create({
+        title: 'Road Potholes',
+        description: ['Large potholes on main street'],
+        category: 'infrastructure',
+        problemType: 'infrastructure',
+        preferredCommunication: 'email',
+        location: { type: 'Point', coordinates: [77.2, 28.6] },
+        locationType: 'locality',
+        isPopulationAffected: true,
+        approxNoPeopleAffected: 100,
+        hasAffectedGroups: false,
+        problemPhoto: 'http://example.com/photo.jpg',
+        verificationStatus: 'verified',
+        reportedBy: student._id,
+      });
+    });
+
+    it('should browse verified problems', async () => {
+      const res = await request(app)
+        .get('/api/v1/students/problems')
+        .set('Cookie', studentCookie);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.problems.length).toBeGreaterThan(0);
+    });
+
+    it('should save and unsave a problem', async () => {
+      const saveRes = await request(app)
+        .post(`/api/v1/students/problems/${testProblem._id}/save`)
+        .set('Cookie', studentCookie);
+
+      expect(saveRes.status).toBe(200);
+
+      const getSavedRes = await request(app)
+        .get('/api/v1/students/problems/saved')
+        .set('Cookie', studentCookie);
+
+      expect(getSavedRes.status).toBe(200);
+      expect(getSavedRes.body.data.problems.length).toBe(1);
+
+      const unsaveRes = await request(app)
+        .delete(`/api/v1/students/problems/${testProblem._id}/save`)
+        .set('Cookie', studentCookie);
+
+      expect(unsaveRes.status).toBe(200);
+    });
+  });
+
+  describe('Admin Problem Moderation (/api/v1/admin/problems)', () => {
+    let adminCookie = [];
+    let testProblem = null;
+
+    beforeEach(async () => {
+      const adminUser = await User.create({
+        fullname: 'Moderator Admin',
+        email: 'modadmin@example.com',
+        username: 'modadmin',
+        password: 'password123',
+        role: 'admin',
+      });
+
+      const loginRes = await request(app)
+        .post('/api/v1/users/login')
+        .send({ email: 'modadmin@example.com', password: 'password123' });
+
+      adminCookie = loginRes.headers['set-cookie'];
+
+      testProblem = await Problem.create({
+        title: 'Unverified Issue',
+        description: ['Pending verification problem'],
+        category: 'healthcare',
+        problemType: 'health',
+        preferredCommunication: 'email',
+        location: { type: 'Point', coordinates: [77.2, 28.6] },
+        locationType: 'city',
+        isPopulationAffected: true,
+        approxNoPeopleAffected: 50,
+        hasAffectedGroups: false,
+        problemPhoto: 'http://example.com/photo.jpg',
+        verificationStatus: 'pending',
+        reportedBy: adminUser._id,
+      });
+    });
+
+    it('should update verification status of a problem', async () => {
+      const res = await request(app)
+        .patch(`/api/v1/admin/problems/${testProblem._id}/status`)
+        .set('Cookie', adminCookie)
+        .send({ verificationStatus: 'verified' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.verificationStatus).toBe('verified');
+    });
+
+    it('should set severity and urgency of a problem', async () => {
+      const res = await request(app)
+        .patch(`/api/v1/admin/problems/${testProblem._id}/severity-urgency`)
+        .set('Cookie', adminCookie)
+        .send({ severity: 'high', urgency: 'urgent' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.severity).toBe('high');
+      expect(res.body.data.urgency).toBe('urgent');
     });
   });
 

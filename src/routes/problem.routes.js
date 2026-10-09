@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { registerProblem } from "../controllers/problem.controller.js";
+import {
+  registerProblem,
+  trackProblem,
+  updateProblem,
+  deleteProblem,
+} from "../controllers/problem.controller.js";
 import { verifyJwt } from "../middlewares/auth.middlerware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
@@ -12,5 +17,8 @@ const problemUpload = upload.fields([
 ]);
 
 router.post("/", problemUpload, registerProblem);
+router.get("/:problemId", trackProblem);
+router.patch("/:problemId", updateProblem);
+router.delete("/:problemId", deleteProblem);
 
 export default router;

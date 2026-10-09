@@ -9,6 +9,7 @@ import facultyRouter from "./routes/faculty.routes.js";
 import adminRouter from "./routes/admin.routes.js";
 import reporterRouter from "./routes/reporter.routes.js";
 import problemRouter from "./routes/problem.routes.js";
+import teamRouter from "./routes/team.routes.js";
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use("/api/v1/faculty", facultyRouter);
 app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/reporters", reporterRouter);
 app.use("/api/v1/problems", problemRouter);
+app.use("/api/v1/teams", teamRouter);
 
 app.use((req, _res, next) => {
   next({ statusCode: 404, message: `Route not found: ${req.method} ${req.originalUrl}` });

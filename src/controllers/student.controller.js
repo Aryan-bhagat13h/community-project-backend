@@ -1,8 +1,10 @@
+import mongoose from "mongoose";
 import {ApiError} from '../utils/api-error.js';
 import {asyncHandler} from '../utils/async-handler.js';
 import { ApiResponse } from '../utils/api-response.js';
 import { Problem } from '../models/problem.models.js';
 import { SavedProblem } from '../models/saved-problem.models.js';
+
 const browseProblems = asyncHandler(async (req, res) => {
   if (!req.user?._id) {
     throw new ApiError(401, "Unauthorised access");
@@ -100,7 +102,7 @@ const savedProblem = asyncHandler(async(req,res) => {
     throw new ApiError(401, "Unauthorised access");
   }
 
-  const {problemId} = req.params
+  const {problemId} = req.params;
 
   if(!mongoose.Types.ObjectId.isValid(problemId)){
     throw new ApiError(400, "Invalid problem id");
@@ -112,8 +114,13 @@ const savedProblem = asyncHandler(async(req,res) => {
     verificationStatus: "verified"
   });
 
-   try {
-    await SavedProblem.create({ user: req.user._id, problem: problem._id });
+  if(!problem){
+    throw new ApiError(404, "Problem not found");
+  }
+
+  let savedDoc;
+  try {
+    savedDoc = await SavedProblem.create({ user: req.user._id, problem: problem._id });
   } catch (err) {
     if (err.code === 11000) {
       throw new ApiError(409, "Problem already saved");
@@ -121,13 +128,9 @@ const savedProblem = asyncHandler(async(req,res) => {
     throw err;
   }
 
-  if(!savedProblem){
-    throw new ApiError(404, "Problem not found");
-  }
-
   return res
     .status(200)
-    .json(new ApiResponse(200, savedProblem, "Problem saved successfully"))
+    .json(new ApiResponse(200, savedDoc, "Problem saved successfully"));
 });
 
 const unsaveProblem = asyncHandler(async(req, res) => {
@@ -140,14 +143,14 @@ const unsaveProblem = asyncHandler(async(req, res) => {
     throw new ApiError(400, "Invalid problem Id");
   }
 
-  const result =  await SavedProblem.deleteOne({user: req.user._id, proble: problemId});
+  const result = await SavedProblem.deleteOne({user: req.user._id, problem: problemId});
   if(result.deletedCount === 0){
     throw new ApiError(404, "Saved problem not found");
   }
 
   return res
     .status(200)
-    .json(200, {problemId}, "Unsave problem succesfully")
+    .json(new ApiResponse(200, {problemId}, "Unsaved problem successfully"));
 });
 
 const getSavedProblems = asyncHandler(async(req,res) => {
@@ -183,7 +186,7 @@ const getSavedProblems = asyncHandler(async(req,res) => {
       200,
       { problems, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } },
       "Saved problems fetched successfully"
-    ))
+    ));
 });
 
-export {browseProblems, savedProblem, unsaveProblem}
+export {browseProblems, savedProblem, unsaveProblem, getSavedProblems};

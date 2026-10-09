@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Problem } from "../models/problem.models.js";
 import { asyncHandler } from "../utils/async-handler.js";
 import { ApiError } from '../utils/api-error.js';

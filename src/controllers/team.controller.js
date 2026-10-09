@@ -1,39 +1,42 @@
-import {asyncHandler} from '../utils/async-handler.js';
-import {Team} from '../models/team-models.js'
-import {ApiError} from '../utils/api-error.js';
-import {ApiResponse} from '../utils/api-response.js'
-const createTeam = asyncHandler(async(req,res) => {
-  if(!req.user?._id){
-    throw new ApiError(401, "Unauthorised access")
+import mongoose from "mongoose";
+import { asyncHandler } from '../utils/async-handler.js';
+import { Team } from '../models/team-models.js';
+import { User } from '../models/user.models.js';
+import { JoinRequest } from '../models/join-request.model.js';
+import { ApiError } from '../utils/api-error.js';
+import { ApiResponse } from '../utils/api-response.js';
+
+const createTeam = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
   }
 
-  const {name, description, maxMembers} = req.body;
+  const { name, description, maxMembers } = req.body ?? {};
 
-  if(name.trim === "" || name === undefined){
-    throw new ApiError(300, "name for the the team is required");
+  if (!name || typeof name !== "string" || name.trim() === "") {
+    throw new ApiError(400, "Team name is required");
   }
 
-  if(maxMembers === null || maxMembers > 8){
-    throw new ApiError(400, "Please enter valid max members");
+  const limit = Number(maxMembers) || 5;
+  if (limit < 2 || limit > 8) {
+    throw new ApiError(400, "maxMembers must be between 2 and 8");
   }
 
   const team = await Team.create({
-    $set: {
-      name: name.trim(),
-      description: description.trim(),
-      maxMembers,
-      leader: req.user._id
-    },
-    runValidators: true
+    name: name.trim(),
+    description: description ? String(description).trim() : "",
+    maxMembers: limit,
+    leader: req.user._id,
+    teamMembers: [req.user._id],
   });
 
-  if(!team){
-    throw new ApiError(403, "Error occured while creating a team");
+  if (!team) {
+    throw new ApiError(500, "Error occurred while creating team");
   }
 
   return res
-    .status(200)
-    .json(new ApiResponse(200, team, "Team created succesfully"))
+    .status(201)
+    .json(new ApiResponse(201, team, "Team created successfully"));
 });
 
 const addMembers = asyncHandler(async (req, res) => {
