@@ -128,5 +128,63 @@ const savedProblem = asyncHandler(async(req,res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, savedProblem, "Problem saved successfully"))
-})
-export {browseProblems}
+});
+
+const unsaveProblem = asyncHandler(async(req, res) => {
+  if(!req.user?._id){
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const {problemId} = req.params;
+  if(!mongoose.Types.ObjectId.isValid(problemId)){
+    throw new ApiError(400, "Invalid problem Id");
+  }
+
+  const result =  await SavedProblem.deleteOne({user: req.user._id, proble: problemId});
+  if(result.deletedCount === 0){
+    throw new ApiError(404, "Saved problem not found");
+  }
+
+  return res
+    .status(200)
+    .json(200, {problemId}, "Unsave problem succesfully")
+});
+
+const getSavedProblems = asyncHandler(async(req,res) => {
+  if(!req.user?._id){
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 12, 1), 50);
+
+  const [saved, total] = await Promise.all([
+    SavedProblem.find({ user: req.user._id })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .populate({
+        path: "problem",
+        match: { isDeleted: false },
+        select: "title description location locationType severity urgency skills problemPhoto reportedBy verificationStatus",
+        populate: { path: "reportedBy", select: "username fullName" },
+      })
+      .lean(),
+    SavedProblem.countDocuments({ user: req.user._id }),
+  ]);
+
+  const problems = saved
+    .filter((s) => s.problem)
+    .map((s) => ({ ...s.problem, savedAt: s.createdAt }));
+
+  return res
+  .status(200)
+  .json(new ApiResponse(
+      200,
+      { problems, pagination: { total, page, limit, totalPages: Math.ceil(total / limit) } },
+      "Saved problems fetched successfully"
+    ))
+});
+
+
+export {browseProblems, savedProblem, unsaveProblem}
