@@ -243,5 +243,7 @@ const problemSchema = new Schema(
 
 // Geo queries 
 problemSchema.index({ location: "2dsphere" });
+problemSchema.index({ verificationStatus: 1, isDeleted: 1, createdAt: -1 });
+problemSchema.index({ skills: 1 });
 
 export const Problem = mongoose.model("Problem", problemSchema);

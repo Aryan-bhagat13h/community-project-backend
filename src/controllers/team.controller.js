@@ -101,4 +101,86 @@ const addMembers = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, updatedTeam, "Members added successfully"));
 });
-export {createTeam, addMembers}
+
+const getTeamRequests = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { teamId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    throw new ApiError(400, "Invalid team id");
+  }
+
+  const team = await Team.findOne({ _id: teamId, leader: req.user._id }).select("_id");
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  const requests = await JoinRequest.find({ team: teamId, status: "pending" })
+    .populate("user", "username fullName")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, requests, "Join requests fetched successfully"));
+});
+
+const acceptJoinRequest = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { teamId, requestId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(teamId) || !mongoose.Types.ObjectId.isValid(requestId)) {
+    throw new ApiError(400, "Invalid team or request id");
+  }
+
+  const team = await Team.findOne({ _id: teamId, leader: req.user._id }).select("_id");
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  const request = await JoinRequest.findOneAndUpdate(
+    { _id: requestId, team: teamId, status: "pending" },
+    { $set: { status: "accepted", respondedAt: new Date() } },
+    { new: true }
+  );
+  if (!request) {
+    throw new ApiError(404, "Pending request not found");
+  }
+
+  const undoAccept = () =>
+    JoinRequest.findByIdAndUpdate(request._id, {
+      $set: { status: "pending" },
+      $unset: { respondedAt: 1 },
+    }).catch(() => {
+    });
+
+  let updatedTeam;
+  try {
+    updatedTeam = await Team.findOneAndUpdate(
+      {
+        _id: teamId,
+        teamMembers: { $ne: request.user },
+        $expr: { $lt: [{ $size: "$teamMembers" }, "$maxMembers"] },
+      },
+      { $addToSet: { teamMembers: request.user } },
+      { new: true }
+    ).populate("teamMembers", "username fullName");
+  } catch (err) {
+    await undoAccept();
+    throw err;
+  }
+
+  if (!updatedTeam) {
+    await undoAccept();
+    throw new ApiError(409, "Team is full or the user is already a member");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedTeam, "Join request accepted successfully"));
+});
+export {createTeam, addMembers, getTeamRequests, acceptJoinRequest}
