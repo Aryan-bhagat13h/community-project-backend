@@ -345,4 +345,166 @@ const createProject = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, project, "Project created successfully"));
 });
 
-export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject};
+const getMyProjects = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 12, 1), 50);
+
+  const teamIds = await Team.distinct("_id", { teamMembers: req.user._id });
+  const filter = { team: { $in: teamIds } };
+
+  const [projects, total] = await Promise.all([
+    Project.find(filter)
+      .select("projectName projectDescription technologies estimatedDuration problem team createdAt")
+      .populate("problem", "title category severity urgency problemPhoto")
+      .populate("team", "name")
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Project.countDocuments(filter),
+  ]);
+
+  const totalPages = Math.ceil(total / limit);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        projects,
+        pagination: { total, page, limit, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
+      },
+      "Projects fetched successfully"
+    )
+  );
+});
+
+const getProject = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { projectId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(projectId)) {
+    throw new ApiError(400, "Invalid project id");
+  }
+
+  const teamIds = await Team.distinct("_id", { teamMembers: req.user._id });
+
+  const project = await Project.findOne({ _id: projectId, team: { $in: teamIds } })
+    .populate("problem", "title category severity urgency location locationType problemPhoto")
+    .populate({
+      path: "team",
+      select: "name leader teamMembers maxMembers",
+      populate: { path: "teamMembers", select: "username fullName" },
+    })
+    .populate("createdBy", "username fullName")
+    .lean();
+
+  if (!project) {
+    throw new ApiError(404, "Project not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, project, "Project fetched successfully"));
+});
+
+const updateProject = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { projectId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(projectId)) {
+    throw new ApiError(400, "Invalid project id");
+  }
+
+  const body = req.body ?? {};
+  const updatedFields = {};
+
+  for (const field of ["projectName", "objective", "expectedSolution"]) {
+    const value = body[field];
+    if (value === undefined) continue;
+    if (typeof value !== "string" || !value.trim()) {
+      throw new ApiError(400, `${field} cannot be empty`);
+    }
+    updatedFields[field] = value.trim();
+  }
+
+  if (body.projectDescription !== undefined) {
+    if (typeof body.projectDescription !== "string") {
+      throw new ApiError(400, "projectDescription must be a string");
+    }
+    updatedFields.projectDescription = body.projectDescription.trim();
+  }
+
+  if (body.technologies !== undefined) {
+    if (!Array.isArray(body.technologies)) {
+      throw new ApiError(400, "technologies must be an array");
+    }
+    const clean = body.technologies.map((t) => String(t).trim()).filter(Boolean);
+    if (clean.length === 0) {
+      throw new ApiError(400, "At least one technology is required");
+    }
+    updatedFields.technologies = clean;
+  }
+
+  if (body.estimatedDuration !== undefined) {
+    const n = Number(body.estimatedDuration);
+    if (body.estimatedDuration === null || body.estimatedDuration === "" || !Number.isFinite(n) || n < 1) {
+      throw new ApiError(400, "estimatedDuration must be a number of at least 1");
+    }
+    updatedFields.estimatedDuration = n;
+  }
+
+  if (Object.keys(updatedFields).length === 0) {
+    throw new ApiError(400, "Provide at least one field to update");
+  }
+
+  const teamIds = await Team.distinct("_id", { teamMembers: req.user._id });
+
+  const project = await Project.findOneAndUpdate(
+    { _id: projectId, team: { $in: teamIds } },
+    { $set: updatedFields },
+    { new: true, runValidators: true }
+  );
+
+  if (!project) {
+    throw new ApiError(404, "Project not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, project, "Project updated successfully"));
+});
+
+const deleteProject = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { projectId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(projectId)) {
+    throw new ApiError(400, "Invalid project id");
+  }
+
+  const teamIds = await Team.distinct("_id", { leader: req.user._id });
+
+  const project = await Project.findOneAndDelete({
+    _id: projectId,
+    team: { $in: teamIds },
+  }).select("_id");
+
+  if (!project) {
+    throw new ApiError(404, "Project not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { projectId }, "Project deleted successfully"));
+});
+export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject, getMyProjects, getProject, updateProject, deleteProject};
