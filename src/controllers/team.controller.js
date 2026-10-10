@@ -186,4 +186,78 @@ const acceptJoinRequest = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, updatedTeam, "Join request accepted successfully"));
 });
-export {createTeam, addMembers, getTeamRequests, acceptJoinRequest}
+
+const sendJoinRequest = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { teamId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    throw new ApiError(400, "Invalid team id");
+  }
+
+  const { message } = req.body ?? {};
+
+  const team = await Team.findById(teamId).select("teamMembers maxMembers");
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  if (team.teamMembers.some((id) => id.equals(req.user._id))) {
+    throw new ApiError(409, "You are already a member of this team");
+  }
+  if (team.teamMembers.length >= team.maxMembers) {
+    throw new ApiError(409, "This team is full");
+  }
+
+  let request;
+  try {
+    request = await JoinRequest.create({
+      team: team._id,
+      user: req.user._id,
+      message: typeof message === "string" ? message.trim() : undefined,
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      throw new ApiError(409, "You already have a pending request for this team");
+    }
+    throw err;
+  }
+
+  return res
+    .status(201)
+    .json(new ApiResponse(201, request, "Join request sent successfully"));
+});
+
+const rejectJoinRequest = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { teamId, requestId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(teamId) || !mongoose.Types.ObjectId.isValid(requestId)) {
+    throw new ApiError(400, "Invalid team or request id");
+  }
+
+  const team = await Team.findOne({ _id: teamId, leader: req.user._id }).select("_id");
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  const request = await JoinRequest.findOneAndUpdate(
+    { _id: requestId, team: teamId, status: "pending" },
+    { $set: { status: "rejected", respondedAt: new Date() } },
+    { new: true }
+  );
+
+  if (!request) {
+    throw new ApiError(404, "Pending request not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, request, "Join request rejected successfully"));
+});
+
+export {createTeam, addMembers, getTeamRequests, acceptJoinRequest,sendJoinRequest, rejectJoinRequest}
