@@ -236,6 +236,13 @@ const problemSchema = new Schema(
     isAdopted: {
       type: Boolean, 
       default: false
+    },
+    adoptedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User"
+    },
+    adoptedAt: { 
+      type: Date 
     }
   },
   { timestamps: true }
