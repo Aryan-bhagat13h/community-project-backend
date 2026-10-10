@@ -226,4 +226,37 @@ const adoptProblem = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, problem, "Problem adopted successfully"));
 });
 
-export {browseProblems, savedProblem, unsaveProblem, getSavedProblems};
+const abandonProblem = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { problemId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(problemId)) {
+    throw new ApiError(400, "Invalid problem id");
+  }
+
+  const problem = await Problem.findOneAndUpdate(
+    {
+      _id: problemId,
+      isDeleted: false,
+      isAdopted: true,
+      adoptedBy: req.user._id,
+    },
+    {
+      $set: { isAdopted: false },
+      $unset: { adoptedBy: "", adoptedAt: "" },
+    },
+    { new: true }
+  ).select("title isAdopted");
+
+  if (!problem) {
+    throw new ApiError(404, "Adopted problem not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, problem, "Problem abandoned successfully"));
+});
+
+export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem};
