@@ -4,6 +4,8 @@ import {asyncHandler} from '../utils/async-handler.js';
 import { ApiResponse } from '../utils/api-response.js';
 import { Problem } from '../models/problem.models.js';
 import { SavedProblem } from '../models/saved-problem.models.js';
+import { Project } from "../models/project.models.js";
+import {Team} from '../models/team-models.js'
 
 const browseProblems = asyncHandler(async (req, res) => {
   if (!req.user?._id) {
@@ -259,4 +261,88 @@ const abandonProblem = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, problem, "Problem abandoned successfully"));
 });
 
-export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem};
+const createProject = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const {
+    teamId, problemId, projectName, projectDescription,
+    objective, expectedSolution, technologies, estimatedDuration,
+  } = req.body ?? {};
+
+  if (!mongoose.Types.ObjectId.isValid(teamId) || !mongoose.Types.ObjectId.isValid(problemId)) {
+    throw new ApiError(400, "Valid teamId and problemId are required");
+  }
+
+  for (const [field, value] of Object.entries({ projectName, objective, expectedSolution })) {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new ApiError(400, `${field} is required`);
+    }
+  }
+
+  if (!Array.isArray(technologies)) {
+    throw new ApiError(400, "technologies must be an array");
+  }
+  const cleanTechnologies = technologies.map((t) => String(t).trim()).filter(Boolean);
+  if (cleanTechnologies.length === 0) {
+    throw new ApiError(400, "At least one technology is required");
+  }
+
+  let duration;
+  if (estimatedDuration !== undefined && estimatedDuration !== null && estimatedDuration !== "") {
+    duration = Number(estimatedDuration);
+    if (!Number.isFinite(duration) || duration < 1) {
+      throw new ApiError(400, "estimatedDuration must be a number of at least 1");
+    }
+  }
+
+  // Caller must be a member of the team, non-members get a 404
+  const team = await Team.findOne({ _id: teamId, teamMembers: req.user._id }).select("teamMembers");
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  const problem = await Problem.findOne({
+    _id: problemId,
+    isDeleted: false,
+    isRejected: { $ne: true },
+    verificationStatus: "verified",
+  }).select("isAdopted adoptedBy");
+  if (!problem) {
+    throw new ApiError(404, "Problem not found");
+  }
+
+  // The problem must have been adopted by someone on this team
+  const adoptedByTeamMember =
+    problem.isAdopted && team.teamMembers.some((id) => id.equals(problem.adoptedBy));
+  if (!adoptedByTeamMember) {
+    throw new ApiError(409, "This problem must be adopted by a member of your team first");
+  }
+
+  let project;
+  try {
+    project = await Project.create({
+      projectName: projectName.trim(),
+      projectDescription: typeof projectDescription === "string" ? projectDescription.trim() : undefined,
+      objective: objective.trim(),
+      expectedSolution: expectedSolution.trim(),
+      technologies: cleanTechnologies,
+      estimatedDuration: duration,
+      problem: problem._id,
+      team: team._id,
+      createdBy: req.user._id,
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      throw new ApiError(409, "Your team already has a project for this problem");
+    }
+    throw err;
+  }
+
+  return res
+    .status(201)
+    .json(new ApiResponse(201, project, "Project created successfully"));
+});
+
+export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject};
