@@ -683,4 +683,12 @@ const sendMentorRequest = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, faculty, "Mentor request sent successfully"));
 });
 
+const submitProposal = asyncHandler(async(req,res) => {
+  if(!req.user?._id){
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  
+})
+
 export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject, getMyProjects, getProject, updateProject, deleteProject, findMentor, sendMentorRequest};
