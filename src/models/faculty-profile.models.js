@@ -38,6 +38,18 @@ const facultyProfileSchema = new Schema(
     },
     verifiedBy: { type: Schema.Types.ObjectId, ref: "User" },
     verifiedAt: { type: Date },
+    isRequested: {
+      type: Boolean,
+      default: false
+    },
+    requestedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "Team"
+    },
+    isRequestAccepted: {
+      type: Boolean,
+      default: false
+    }
   },
   { timestamps: true }
 );

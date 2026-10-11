@@ -507,4 +507,180 @@ const deleteProject = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, { projectId }, "Project deleted successfully"));
 });
-export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject, getMyProjects, getProject, updateProject, deleteProject};
+
+const findMentor = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { teamId } = req.params;
+  const { projectId } = req.query;
+
+  if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    throw new ApiError(400, "Invalid team id");
+  }
+  if (projectId !== undefined && (typeof projectId !== "string" || !mongoose.Types.ObjectId.isValid(projectId))) {
+    throw new ApiError(400, "Invalid project id");
+  }
+
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 30);
+  const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  // Any member of the team can look for a mentor
+  const team = await Team.findOne({ _id: teamId, teamMembers: req.user._id }).select("leader");
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  const projectFilter = { team: team._id };
+  if (projectId) projectFilter._id = projectId;
+
+  const projects = await Project.find(projectFilter)
+    .select("technologies problem")
+    .populate("problem", "category subCategory skills")
+    .lean();
+
+  if (projectId && projects.length === 0) {
+    throw new ApiError(404, "Project not found");
+  }
+
+  // Problems adopted by the leader
+  const adoptedProblems = projectId
+    ? []
+    : await Problem.find({ adoptedBy: team.leader, isAdopted: true, isDeleted: false })
+        .select("category subCategory skills")
+        .lean();
+
+  // Build search keywords from projects and problems
+  const keywordSet = new Set();
+  const addKeyword = (v) => {
+    if (typeof v !== "string") return;
+    const k = v.replace(/_/g, " ").trim().toLowerCase();
+    if (k && k !== "other") keywordSet.add(k);
+  };
+  const addProblem = (p) => {
+    if (!p) return;
+    addKeyword(p.category);
+    (p.subCategory ?? []).forEach(addKeyword);
+    (p.skills ?? []).forEach(addKeyword);
+  };
+
+  projects.forEach((pr) => {
+    (pr.technologies ?? []).forEach(addKeyword);
+    addProblem(pr.problem);
+  });
+  adoptedProblems.forEach(addProblem);
+
+  const keywords = [...keywordSet].slice(0, 30);
+  if (keywords.length === 0) {
+    throw new ApiError(409, "Adopt a problem or create a project first so mentors can be matched");
+  }
+
+  const matchers = keywords.map((k) => ({
+    keyword: k,
+    regex: new RegExp(k.length < 4 ? `\\b${escapeRegex(k)}\\b` : escapeRegex(k), "i"),
+  }));
+  const regexes = matchers.map((m) => m.regex);
+
+  const candidates = await FacultyProfile.find({
+    verificationStatus: "verified",
+    $or: [
+      { mentorshipAreas: { $in: regexes } },
+      { expertise: { $in: regexes } },
+      { researchInterests: { $in: regexes } },
+    ],
+  })
+    .select("institution department designation expertise researchInterests mentorshipAreas experience availability linkedin profileUrl")
+    .limit(200)
+    .lean();
+
+  const fieldWeights = { mentorshipAreas: 3, expertise: 2, researchInterests: 2 };
+
+  const ranked = candidates
+    .map((f) => {
+      const matchedOn = new Set();
+      let matchScore = 0;
+      for (const [field, weight] of Object.entries(fieldWeights)) {
+        const values = f[field] ?? [];
+        for (const { keyword, regex } of matchers) {
+          if (values.some((v) => regex.test(v))) {
+            matchScore += weight;
+            matchedOn.add(keyword);
+          }
+        }
+      }
+      return { ...f, matchScore, matchedOn: [...matchedOn] };
+    })
+    .sort((a, b) => b.matchScore - a.matchScore || (b.experience ?? 0) - (a.experience ?? 0))
+    .slice(0, limit);
+
+  const baseProfiles = await Profile.find({
+    roleProfile: { $in: ranked.map((f) => f._id) },
+    roleProfileModel: ROLE_PROFILE_MODEL.faculty,
+  })
+    .select("user roleProfile")
+    .populate("user", "username fullName")
+    .lean();
+
+  const userByFaculty = new Map(baseProfiles.map((p) => [String(p.roleProfile), p.user]));
+
+  const mentors = ranked.map((f) => ({ ...f, user: userByFaculty.get(String(f._id)) ?? null }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { keywords, mentors }, "Mentors fetched successfully"));
+});
+
+const sendMentorRequest = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { teamId, facultyId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(teamId) || !mongoose.Types.ObjectId.isValid(facultyId)) {
+    throw new ApiError(400, "Invalid team or faculty id");
+  }
+
+  const team = await Team.findOne({ _id: teamId, leader: req.user._id }).select("_id");
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  const teamAlreadyRequested = await FacultyProfile.exists({
+    requestedBy: team._id,
+    isRequested: true,
+  });
+  if (teamAlreadyRequested) {
+    throw new ApiError(409, "Your team already has a pending or accepted mentor request");
+  }
+
+  const faculty = await FacultyProfile.findOneAndUpdate(
+    {
+      _id: facultyId,
+      verificationStatus: "verified",
+      isRequested: { $ne: true },
+    },
+    {
+      $set: {
+        isRequested: true,
+        requestedBy: team._id,
+        isRequestAccepted: false,
+      },
+    },
+    { new: true }
+  ).select("institution department designation isRequested requestedBy");
+
+  if (!faculty) {
+    const exists = await FacultyProfile.exists({ _id: facultyId, verificationStatus: "verified" });
+    if (exists) {
+      throw new ApiError(409, "This mentor already has a request");
+    }
+    throw new ApiError(404, "Mentor not found");
+  }
+
+  return res
+    .status(201)
+    .json(new ApiResponse(201, faculty, "Mentor request sent successfully"));
+});
+
+export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject, getMyProjects, getProject, updateProject, deleteProject, findMentor, sendMentorRequest};
