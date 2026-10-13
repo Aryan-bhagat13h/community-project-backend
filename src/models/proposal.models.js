@@ -2,6 +2,24 @@ import mongoose, { Schema } from "mongoose";
 
 const stringList = () => [{ type: String, trim: true }];
 
+
+export const PROPOSAL_SECTIONS = [
+  "general", "title", "description", "problemSummary", "rootCauses",
+  "peopleAffected", "solution", "resources", "budget", "timeline",
+  "beneficiaries", "riskAssessment", "attachments",
+];
+
+const suggestionSchema = new Schema(
+  {
+    suggestedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    section: { type: String, enum: PROPOSAL_SECTIONS, default: "general" },
+    message: { type: String, required: true, trim: true, maxlength: 1000 },
+    isResolved: { type: Boolean, default: false },
+    resolvedAt: { type: Date },
+  },
+  { timestamps: true }
+);
+
 const expenseSchema = new Schema(
   {
     item: { 
@@ -174,12 +192,32 @@ const proposalSchema = new Schema(
 
     attachments: [attachmentSchema],
 
+    suggestions: [suggestionSchema],
+
     status: {
       type: String,
       enum: ["draft", "submitted", "under_review", "approved", "rejected"],
       default: "draft",
     },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    isRejected: {
+      type: Boolean,
+      default: false
+    },
+    rejectedAt: {
+      type: Date,
+      required: true
+    },
+    rejectionReason: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 5
+    },
+    rejectedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User"
+    }
   },
   { timestamps: true }
 );
