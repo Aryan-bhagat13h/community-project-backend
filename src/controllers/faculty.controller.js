@@ -1,10 +1,12 @@
+import mongoose from "mongoose";
 import { asyncHandler } from "../utils/async-handler.js";
-import {Profile} from '../models/problem.models.js'
+import { Profile } from '../models/profile.models.js';
 import { FacultyProfile } from "../models/faculty-profile.models.js";
 import { Project } from "../models/project.models.js";
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
-import { Proposal } from "../models/proposal.models.js";
+import { Proposal, PROPOSAL_SECTIONS } from "../models/proposal.models.js";
+import { ROLE_PROFILE_MODEL } from "../models/role-profile.models.js";
 
 
 const getMentorshipRequests = asyncHandler(async (req, res) => {

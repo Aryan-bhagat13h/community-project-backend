@@ -56,5 +56,6 @@ const projectSchema = new Schema(
 
 projectSchema.index({ team: 1 });
 projectSchema.index({ problem: 1 });
+projectSchema.index({ team: 1, problem: 1 }, { unique: true });
 
 export const Project = mongoose.model("Project", projectSchema);

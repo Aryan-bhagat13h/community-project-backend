@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { asyncHandler } from "../utils/async-handler.js";
 import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
@@ -259,4 +260,28 @@ const deleteProposal = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { proposalId }, "Proposal deleted successfully"));
 });
 
-export {createProposal, updateProposal, deleteProposal}
+const getProposal = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { proposalId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(proposalId)) {
+    throw new ApiError(400, "Invalid proposal id");
+  }
+
+  const proposal = await Proposal.findById(proposalId)
+    .populate("project", "projectName projectDescription")
+    .populate("team", "name leader teamMembers")
+    .populate("createdBy", "username fullname");
+
+  if (!proposal) {
+    throw new ApiError(404, "Proposal not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, proposal, "Proposal fetched successfully"));
+});
+
+export { createProposal, updateProposal, deleteProposal, getProposal };

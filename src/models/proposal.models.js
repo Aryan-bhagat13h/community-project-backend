@@ -205,12 +205,10 @@ const proposalSchema = new Schema(
       default: false
     },
     rejectedAt: {
-      type: Date,
-      required: true
+      type: Date
     },
     rejectionReason: {
       type: String,
-      required: true,
       trim: true,
       minlength: 5
     },

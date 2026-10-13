@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer'
-import { ApiError } from '../utils/apiError.js'
+import { ApiError } from '../utils/api-error.js'
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",

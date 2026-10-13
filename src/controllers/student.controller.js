@@ -5,7 +5,10 @@ import { ApiResponse } from '../utils/api-response.js';
 import { Problem } from '../models/problem.models.js';
 import { SavedProblem } from '../models/saved-problem.models.js';
 import { Project } from "../models/project.models.js";
-import {Team} from '../models/team-models.js'
+import {Team} from '../models/team-models.js';
+import { FacultyProfile } from "../models/faculty-profile.models.js";
+import { Profile } from "../models/profile.models.js";
+import { ROLE_PROFILE_MODEL } from "../models/role-profile.models.js";
 
 const browseProblems = asyncHandler(async (req, res) => {
   if (!req.user?._id) {
