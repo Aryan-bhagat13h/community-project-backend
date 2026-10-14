@@ -298,4 +298,72 @@ const acceptProposal = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, proposal, "Proposal accepted successfully"));
 });
 
-export {getMentorshipRequests, acceptMentorshipRequest, rejectMentorshipRequest, rejectProposal, suggestChanges, acceptProposal}
+const seeProjectProgress = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { projectId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(projectId)) {
+    throw new ApiError(400, "Invalid project id");
+  }
+
+  const profile = await Profile.findOne({ user: req.user._id }).select("roleProfile roleProfileModel");
+  if (!profile?.roleProfile || profile.roleProfileModel !== ROLE_PROFILE_MODEL.faculty) {
+    throw new ApiError(403, "Only faculty can view project progress");
+  }
+
+  const faculty = await FacultyProfile.findOne({
+    _id: profile.roleProfile,
+    isRequested: true,
+    isRequestAccepted: true,
+  }).select("requestedBy");
+
+  if (!faculty?.requestedBy) {
+    throw new ApiError(403, "You are not mentoring any team");
+  }
+
+  const project = await Project.findOne({ _id: projectId, team: faculty.requestedBy })
+    .select("projectName technologies estimatedDuration problem team")
+    .populate("problem", "title category")
+    .populate("team", "name")
+    .lean();
+
+  if (!project) {
+    throw new ApiError(404, "Project not found");
+  }
+
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 50);
+
+  const [updates, total, latest] = await Promise.all([
+    ProgressUpdate.find({ project: project._id })
+      .select("-project -team")
+      .populate("postedBy", "username fullName")
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    ProgressUpdate.countDocuments({ project: project._id }),
+    ProgressUpdate.findOne({ project: project._id, percentComplete: { $exists: true } })
+      .sort({ createdAt: -1 })
+      .select("percentComplete")
+      .lean(),
+  ]);
+
+  const totalPages = Math.ceil(total / limit);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        project,
+        latestPercentComplete: latest?.percentComplete ?? null,
+        updates,
+        pagination: { total, page, limit, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
+      },
+      "Project progress fetched successfully"
+    )
+  );
+});
+export {getMentorshipRequests, acceptMentorshipRequest, rejectMentorshipRequest, rejectProposal, suggestChanges, acceptProposal, seeProjectProgress}
