@@ -246,4 +246,56 @@ const suggestChanges = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, proposal, "Suggestions sent to the team successfully"));
 });
-export {getMentorshipRequests, acceptMentorshipRequest, rejectMentorshipRequest, rejectProposal, suggestChanges}
+
+const acceptProposal = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { proposalId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(proposalId)) {
+    throw new ApiError(400, "Invalid proposal id");
+  }
+
+  const profile = await Profile.findOne({ user: req.user._id }).select("roleProfile roleProfileModel");
+  if (!profile?.roleProfile || profile.roleProfileModel !== ROLE_PROFILE_MODEL.faculty) {
+    throw new ApiError(403, "Only faculty can accept proposals");
+  }
+
+  const faculty = await FacultyProfile.findOne({
+    _id: profile.roleProfile,
+    isRequested: true,
+    isRequestAccepted: true,
+  }).select("requestedBy");
+
+  if (!faculty?.requestedBy) {
+    throw new ApiError(403, "You are not mentoring any team");
+  }
+
+  const proposal = await Proposal.findOneAndUpdate(
+    {
+      _id: proposalId,
+      team: faculty.requestedBy,
+      isRejected: { $ne: true },
+      status: { $in: ["submitted", "under_review"] },
+    },
+    {
+      $set: {
+        status: "approved",
+        approvedAt: new Date(),
+        approvedBy: req.user._id,
+      },
+    },
+    { new: true, runValidators: true }
+  );
+
+  if (!proposal) {
+    throw new ApiError(404, "Proposal not found or it can no longer be accepted");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, proposal, "Proposal accepted successfully"));
+});
+
+export {getMentorshipRequests, acceptMentorshipRequest, rejectMentorshipRequest, rejectProposal, suggestChanges, acceptProposal}

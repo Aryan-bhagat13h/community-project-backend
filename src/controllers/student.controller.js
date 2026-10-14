@@ -686,4 +686,51 @@ const sendMentorRequest = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, faculty, "Mentor request sent successfully"));
 });
 
-export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject, getMyProjects, getProject, updateProject, deleteProject, findMentor, sendMentorRequest};
+const viewFacultyProfile = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
+
+  const { facultyId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(facultyId)) {
+    throw new ApiError(400, "Invalid faculty id");
+  }
+
+  const faculty = await FacultyProfile.findOne({
+    _id: facultyId,
+    verificationStatus: "verified",
+  })
+    .select(
+      "institution department designation qualifications expertise researchInterests subjects mentorshipAreas experience availability linkedin profileUrl isRequested"
+    )
+    .lean();
+
+  if (!faculty) {
+    throw new ApiError(404, "Faculty not found");
+  }
+
+  const baseProfile = await Profile.findOne({
+    roleProfile: faculty._id,
+    roleProfileModel: ROLE_PROFILE_MODEL.faculty,
+  })
+    .select("user")
+    .populate("user", "username fullName")
+    .lean();
+
+  const { isRequested, ...details } = faculty;
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        ...details,
+        user: baseProfile?.user ?? null,
+        isAvailableForMentoring: !isRequested,
+      },
+      "Faculty profile fetched successfully"
+    )
+  );
+});
+
+
+export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject, getMyProjects, getProject, updateProject, deleteProject, findMentor, sendMentorRequest, viewFacultyProfile};
