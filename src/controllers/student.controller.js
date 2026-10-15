@@ -9,6 +9,7 @@ import {Team} from '../models/team-models.js';
 import { FacultyProfile } from "../models/faculty-profile.models.js";
 import { Profile } from "../models/profile.models.js";
 import { ROLE_PROFILE_MODEL } from "../models/role-profile.models.js";
+import { ProgressUpdate } from "../models/progress-update.models.js";
 
 const browseProblems = asyncHandler(async (req, res) => {
   if (!req.user?._id) {
@@ -731,6 +732,75 @@ const viewFacultyProfile = asyncHandler(async (req, res) => {
     )
   );
 });
+const shareProjectProgress = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorised access");
+  }
 
+  const { projectId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(projectId)) {
+    throw new ApiError(400, "Invalid project id");
+  }
 
-export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject, getMyProjects, getProject, updateProject, deleteProject, findMentor, sendMentorRequest, viewFacultyProfile};
+  const {
+    title, description, percentComplete,
+    completedMilestones, challenges, nextSteps, attachments,
+  } = req.body ?? {};
+
+  for (const [field, value] of Object.entries({ title, description })) {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new ApiError(400, `${field} is required`);
+    }
+  }
+
+  let percent;
+  if (percentComplete !== undefined && percentComplete !== null && percentComplete !== "") {
+    percent = Number(percentComplete);
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      throw new ApiError(400, "percentComplete must be a number between 0 and 100");
+    }
+  }
+
+  if (completedMilestones !== undefined && !Array.isArray(completedMilestones)) {
+    throw new ApiError(400, "completedMilestones must be an array");
+  }
+
+  let cleanAttachments = [];
+  if (attachments !== undefined) {
+    if (!Array.isArray(attachments)) {
+      throw new ApiError(400, "attachments must be an array of { name, url, publicId }");
+    }
+    cleanAttachments = attachments
+      .filter((a) => a && typeof a.url === "string" && a.url.trim())
+      .map((a) => ({
+        name: typeof a.name === "string" ? a.name.trim() : undefined,
+        url: a.url.trim(),
+        publicId: typeof a.publicId === "string" ? a.publicId.trim() : undefined,
+      }));
+  }
+
+  const teamIds = await Team.distinct("_id", { teamMembers: req.user._id });
+  const project = await Project.findOne({ _id: projectId, team: { $in: teamIds } }).select("team");
+  if (!project) {
+    throw new ApiError(404, "Project not found");
+  }
+
+  const update = await ProgressUpdate.create({
+    project: project._id,
+    team: project.team,
+    postedBy: req.user._id,
+    title: title.trim(),
+    description: description.trim(),
+    percentComplete: percent,
+    completedMilestones: (completedMilestones ?? []).map((m) => String(m).trim()).filter(Boolean),
+    challenges: typeof challenges === "string" ? challenges.trim() : undefined,
+    nextSteps: typeof nextSteps === "string" ? nextSteps.trim() : undefined,
+    attachments: cleanAttachments,
+  });
+
+  return res
+    .status(201)
+    .json(new ApiResponse(201, update, "Progress shared successfully"));
+});
+
+export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject, getMyProjects, getProject, updateProject, deleteProject, findMentor, sendMentorRequest, viewFacultyProfile, shareProjectProgress};
