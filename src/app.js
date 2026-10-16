@@ -11,7 +11,7 @@ import reporterRouter from "./routes/reporter.routes.js";
 import problemRouter from "./routes/problem.routes.js";
 import teamRouter from "./routes/team.routes.js";
 import proposalRouter from "./routes/proposal.routes.js";
-
+import healthcheckRouter from "./routes/healthcheck.route.js";
 const app = express();
 
 app.use(cors({
@@ -34,6 +34,7 @@ app.use("/api/v1/reporters", reporterRouter);
 app.use("/api/v1/problems", problemRouter);
 app.use("/api/v1/teams", teamRouter);
 app.use("/api/v1/proposals", proposalRouter);
+app.use("/api/v1/healthcheck", healthcheckRouter);
 
 app.use((req, _res, next) => {
   next({ statusCode: 404, message: `Route not found: ${req.method} ${req.originalUrl}` });
