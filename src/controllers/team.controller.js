@@ -260,4 +260,25 @@ const rejectJoinRequest = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, request, "Join request rejected successfully"));
 });
 
-export {createTeam, addMembers, getTeamRequests, acceptJoinRequest,sendJoinRequest, rejectJoinRequest}
+const getMyTeam = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const teams = await Team.find({ teamMembers: req.user._id })
+    .populate("teamMembers", "fullname username email role")
+    .lean();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        teams,
+        teams.length ? "Teams fetched successfully" : "You are not part of any team yet"
+      )
+    );
+});
+
+
+export {createTeam, addMembers, getTeamRequests, acceptJoinRequest,sendJoinRequest, rejectJoinRequest, getMyTeam}

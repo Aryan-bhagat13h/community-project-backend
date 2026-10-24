@@ -8,6 +8,7 @@ import {
   rejectJoinRequest
 } from "../controllers/team.controller.js";
 import { verifyJwt } from "../middlewares/auth.middlerware.js";
+import { getMyTeam } from "../controllers/team.controller.js";
 
 const router = Router();
 router.use(verifyJwt);
@@ -18,5 +19,6 @@ router.get("/:teamId/requests", getTeamRequests);
 router.patch("/:teamId/requests/:requestId/accept", acceptJoinRequest);
 router.post("/:teamId/requests", sendJoinRequest);
 router.patch("/:teamId/requests/:requestId/reject", rejectJoinRequest);
+router.get("/my", verifyJwt, getMyTeam)
 
 export default router;

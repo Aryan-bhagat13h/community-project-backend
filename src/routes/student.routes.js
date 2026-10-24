@@ -29,9 +29,6 @@ router.post("/problems/:problemId/adopt", adoptProblem);
 router.post("/problems/:problemId/abandon", abandonProblem);
 router.delete("/problems/:problemId/adopt", abandonProblem);
 
-//team
-router.get("/my", verifyJwt, getMyTeam)
-
 // Projects
 router.post("/projects", createProject);
 router.get("/projects", getMyProjects);
