@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import {ApiError} from '../utils/api-error.js';
-import {asyncHandler} from '../utils/async-handler.js';
+import {asyncHandler, asyncHandler} from '../utils/async-handler.js';
 import { ApiResponse } from '../utils/api-response.js';
 import { Problem } from '../models/problem.models.js';
 import { SavedProblem } from '../models/saved-problem.models.js';
@@ -685,6 +685,44 @@ const sendMentorRequest = asyncHandler(async (req, res) => {
   return res
     .status(201)
     .json(new ApiResponse(201, faculty, "Mentor request sent successfully"));
+});
+
+const cancelMentorshipRequest = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const { teamId, facultyId } = req.params;
+  if (!mongoose.isValidObjectId(teamId) || !mongoose.isValidObjectId(facultyId)) {
+    throw new ApiError(400, "Invalid team or faculty id");
+  }
+
+  const team = await Team.findOne({ _id: teamId, leader: req.user._id }).select("_id");
+  if (!team) {
+    throw new ApiError(404, "Team not found, or you are not its leader");
+  }
+
+  const faculty = await FacultyProfile.findOneAndUpdate(
+    {
+      _id: facultyId,
+      requestedBy: team._id,
+      isRequested: true,
+      isRequestAccepted: false,
+    },
+    {
+      $set: { isRequested: false },
+      $unset: { requestedBy: "" },
+    },
+    { new: true }
+  ).select("institution department designation isRequested");
+
+  if (!faculty) {
+    throw new ApiError(404, "No pending request found for this faculty");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, faculty, "Mentorship request cancelled successfully"));
 });
 
 const viewFacultyProfile = asyncHandler(async (req, res) => {
