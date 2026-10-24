@@ -5,7 +5,8 @@ import {
   getTeamRequests,
   acceptJoinRequest,
   sendJoinRequest,
-  rejectJoinRequest
+  rejectJoinRequest,
+  removeTeamMember
 } from "../controllers/team.controller.js";
 import { verifyJwt } from "../middlewares/auth.middlerware.js";
 import { getMyTeam } from "../controllers/team.controller.js";
@@ -19,6 +20,7 @@ router.get("/:teamId/requests", getTeamRequests);
 router.patch("/:teamId/requests/:requestId/accept", acceptJoinRequest);
 router.post("/:teamId/requests", sendJoinRequest);
 router.patch("/:teamId/requests/:requestId/reject", rejectJoinRequest);
-router.get("/my", verifyJwt, getMyTeam)
+router.get("/my", verifyJwt, getMyTeam);
+router.delete("/:teamId/members/:memberId", verifyJwt, removeTeamMember);
 
 export default router;

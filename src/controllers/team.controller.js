@@ -280,5 +280,51 @@ const getMyTeam = asyncHandler(async (req, res) => {
     );
 });
 
+const removeTeamMember = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
 
-export {createTeam, addMembers, getTeamRequests, acceptJoinRequest,sendJoinRequest, rejectJoinRequest, getMyTeam}
+  const { teamId, memberId } = req.params;
+
+  if (!mongoose.isValidObjectId(teamId) || !mongoose.isValidObjectId(memberId)) {
+    throw new ApiError(400, "Invalid team or member id");
+  }
+
+  const team = await Team.findById(teamId);
+  if (!team) {
+    throw new ApiError(404, "Team not found");
+  }
+
+  if (!team.leader.equals(req.user._id)) {
+    throw new ApiError(403, "Only the team leader can remove a team member");
+  }
+
+  if (team.leader.equals(memberId)) {
+    throw new ApiError(
+      400,
+      "The leader cannot be removed. Transfer leadership or delete the team instead"
+    );
+  }
+
+  const isMember = team.teamMembers.some((id) => id.equals(memberId));
+  if (!isMember) {
+    throw new ApiError(404, "This user is not a member of the team");
+  }
+
+  const updatedTeam = await Team.findOneAndUpdate(
+    { _id: teamId, leader: req.user._id },
+    { $pull: { teamMembers: memberId } },
+    { new: true }
+  ).populate("teamMembers", "fullname username email role");
+
+  if (!updatedTeam) {
+    throw new ApiError(409, "Could not remove the member, please try again");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedTeam, "Team member removed successfully"));
+});
+
+export {createTeam, addMembers, getTeamRequests, acceptJoinRequest,sendJoinRequest, rejectJoinRequest, getMyTeam, removeTeamMember}
