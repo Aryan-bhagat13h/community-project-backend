@@ -6,7 +6,7 @@ import {
   browseProblems, savedProblem, unsaveProblem, getSavedProblems,
   adoptProblem, abandonProblem,
   createProject, getMyProjects, getProject, updateProject, deleteProject,
-  findMentor, sendMentorRequest,
+  findMentor, sendMentorRequest, getMyTeam
 } from '../controllers/student.controller.js';
 import { verifyJwt } from '../middlewares/auth.middlerware.js';
 import { restrictedToStudent } from "../middlewares/role.middleware.js";
@@ -28,6 +28,9 @@ router.delete("/problems/:problemId/save", unsaveProblem);
 router.post("/problems/:problemId/adopt", adoptProblem);
 router.post("/problems/:problemId/abandon", abandonProblem);
 router.delete("/problems/:problemId/adopt", abandonProblem);
+
+//team
+router.get("/my", verifyJwt, getMyTeam)
 
 // Projects
 router.post("/projects", createProject);

@@ -803,4 +803,31 @@ const shareProjectProgress = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, update, "Progress shared successfully"));
 });
 
-export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject, getMyProjects, getProject, updateProject, deleteProject, findMentor, sendMentorRequest, viewFacultyProfile, shareProjectProgress};
+import { asyncHandler } from "../utils/async-handler.js";
+import { ApiError } from "../utils/api-error.js";
+import { ApiResponse } from "../utils/api-response.js";
+import { Team } from "../models/team.models.js";
+
+const getMyTeam = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const teams = await Team.find({ teamMembers: req.user._id })
+    .populate("teamMembers", "fullname username email role")
+    .lean();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        teams,
+        teams.length ? "Teams fetched successfully" : "You are not part of any team yet"
+      )
+    );
+});
+
+export { getMyTeam };
+
+export {browseProblems, savedProblem, unsaveProblem, getSavedProblems, adoptProblem, abandonProblem, createProject, getMyProjects, getProject, updateProject, deleteProject, findMentor, sendMentorRequest, viewFacultyProfile, shareProjectProgress, getMyTeam};
