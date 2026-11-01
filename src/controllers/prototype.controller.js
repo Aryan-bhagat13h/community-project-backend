@@ -34,7 +34,6 @@ const toStringList = (v) => {
   const arr = Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : [];
   return arr.map((i) => String(i).trim()).filter(Boolean);
 };
-
 const pickFields = (body = {}) => {
   const out = {};
   for (const f of [...TEXT_FIELDS, ...URL_FIELDS]) {
@@ -111,6 +110,7 @@ const findMentorUserId = async (teamId) => {
   return profile?.user || null;
 };
 
+
 const loadForMember = async (req, { leaderOnly = false } = {}) => {
   requireUser(req);
   const { prototypeId } = req.params;
@@ -173,10 +173,11 @@ const createPrototype = asyncHandler(async (req, res) => {
   }
 
   const latest = await Prototype.findOne({ project: project._id })
+    .setOptions({ includeRemoved: true })
     .sort({ version: -1 })
     .select("version")
     .lean();
-  const version = (latest?.version || 0) + 1;
+  const version = (latest?.version || 0) + 1; 
 
   let prototype;
   try {
@@ -211,12 +212,12 @@ const updatePrototype = asyncHandler(async (req, res) => {
   }
 
   prototype.set(fields);
-  await prototype.save();
+  await prototype.save(); 
+
   return res
     .status(200)
     .json(new ApiResponse(200, prototype, "Prototype updated successfully"));
 });
-
 
 const deletePrototype = asyncHandler(async (req, res) => {
   const { prototype } = await loadForMember(req, { leaderOnly: true });
@@ -238,7 +239,6 @@ const deletePrototype = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, null, "Prototype deleted successfully"));
 });
 
-
 const getPrototype = asyncHandler(async (req, res) => {
   const { prototype } = await loadForRead(req);
 
@@ -254,7 +254,6 @@ const getPrototype = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, prototype, "Prototype fetched successfully"));
 });
 
-
 const getMyPrototypes = asyncHandler(async (req, res) => {
   requireUser(req);
 
@@ -265,7 +264,7 @@ const getMyPrototypes = asyncHandler(async (req, res) => {
   const filter = { team: { $in: teamIds } };
 
   if (req.query.status) {
-    const status = String(req.query.status);
+    const status = String(req.query.status); // String() blocks query-operator injection
     if (!STATUSES.includes(status)) throw new ApiError(400, "Invalid status filter");
     filter.reviewStatus = status;
   }
@@ -294,7 +293,6 @@ const getMyPrototypes = asyncHandler(async (req, res) => {
   );
 });
 
-
 const getProjectPrototypes = asyncHandler(async (req, res) => {
   requireUser(req);
   const { projectId } = req.params;
@@ -318,8 +316,6 @@ const getProjectPrototypes = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, prototypes, "Project prototypes fetched successfully"));
 });
-
-
 
 const uploadPrototypeAttachment = asyncHandler(async (req, res) => {
   const files = Array.isArray(req.files) ? req.files : [];
@@ -413,13 +409,12 @@ const deletePrototypeAttachment = asyncHandler(async (req, res) => {
     throw new ApiError(409, "Prototype changed while deleting. Please try again");
   }
 
-  await deleteCloudFiles([item]); 
+  await deleteCloudFiles([item]); // after the DB update succeeded
 
   return res
     .status(200)
     .json(new ApiResponse(200, updated, "Attachment removed successfully"));
 });
-
 
 const submitPrototype = asyncHandler(async (req, res) => {
   const { prototype } = await loadForMember(req, { leaderOnly: true });
@@ -467,7 +462,9 @@ const resubmitPrototype = asyncHandler(async (req, res) => {
   const mentorUserId = await findMentorUserId(prototype.team);
 
   prototype.reviewStatus = "submitted";
-  prototype.reviewer = mentorUserId || prototype.reviewer;
+  if (!prototype.reviewerAssignedBy) {
+    prototype.reviewer = mentorUserId || prototype.reviewer; 
+  }
   prototype.reviewFeedback = undefined;
   prototype.reviewedAt = undefined;
   prototype.statusHistory.push({ status: "submitted", by: req.user._id, note });
@@ -520,7 +517,7 @@ const getPrototypeFeedback = asyncHandler(async (req, res) => {
         currentFeedback: prototype.reviewFeedback || null,
         reviewer: prototype.reviewer || null,
         reviewedAt: prototype.reviewedAt || null,
-        previousFeedback,
+        previousFeedback, 
       },
       prototype.reviewFeedback
         ? "Feedback fetched successfully"
@@ -528,6 +525,7 @@ const getPrototypeFeedback = asyncHandler(async (req, res) => {
     )
   );
 });
+
 
 const getPrototypeVersionHistory = asyncHandler(async (req, res) => {
   const { prototype, access } = await loadForRead(req);

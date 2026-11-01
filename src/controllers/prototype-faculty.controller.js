@@ -7,6 +7,7 @@ import { PrototypeReview } from "../models/prototype-review.models.js";
 import { Profile } from "../models/profile.models.js";
 import { FacultyProfile } from "../models/facultyProfile.models.js";
 
+
 const REVIEWABLE = ["submitted", "under_review"];
 const VISIBLE_STATUSES = ["submitted", "under_review", "changes_requested", "approved", "rejected"];
 const SCORE_KEYS = ["innovation", "technicalQuality", "completeness", "documentation", "testing"];
@@ -105,6 +106,16 @@ const getMentoredTeamIds = async (userId) => {
   return faculty?.requestedBy ? [faculty.requestedBy] : [];
 };
 
+const reviewerScope = async (userId) => {
+  const teamIds = await getMentoredTeamIds(userId);
+  return {
+    $or: [
+      { team: { $in: teamIds }, reviewerAssignedBy: null },
+      { reviewer: userId, reviewerAssignedBy: { $ne: null } },
+    ],
+  };
+};
+
 const loadAssignedPrototype = async (req) => {
   requireUser(req);
   const { prototypeId } = req.params;
@@ -113,9 +124,15 @@ const loadAssignedPrototype = async (req) => {
   const prototype = await Prototype.findById(prototypeId);
   if (!prototype) throw new ApiError(404, "Prototype not found");
 
-  const teamIds = await getMentoredTeamIds(req.user._id);
-  if (!teamIds.some((id) => id.equals(prototype.team))) {
-    throw new ApiError(403, "This prototype does not belong to a team you mentor");
+  let allowed;
+  if (prototype.reviewerAssignedBy) {
+    allowed = Boolean(prototype.reviewer && prototype.reviewer.equals(req.user._id));
+  } else {
+    const teamIds = await getMentoredTeamIds(req.user._id);
+    allowed = teamIds.some((id) => id.equals(prototype.team));
+  }
+  if (!allowed) {
+    throw new ApiError(403, "You are not the reviewer for this prototype");
   }
   if (prototype.reviewStatus === "draft") {
     throw new ApiError(403, "This prototype has not been submitted yet");
@@ -156,7 +173,7 @@ const getOrCreateReview = async (prototype, reviewerId) => {
     });
   } catch (err) {
     if (err.code === 11000) {
-      return PrototypeReview.findOne({ prototype: prototype._id, round }); 
+      return PrototypeReview.findOne({ prototype: prototype._id, round }); // created a moment ago
     }
     throw err;
   }
@@ -207,29 +224,18 @@ const decisionPayload = ({ updated, review }) => ({
     reviewFeedback: updated.reviewFeedback || null,
   },
   review,
-});
-
+})
 
 const getAssignedPrototypes = asyncHandler(async (req, res) => {
   requireUser(req);
 
-  const teamIds = await getMentoredTeamIds(req.user._id);
+  const scope = await reviewerScope(req.user._id);
   const { page, limit, skip } = parsePagination(req.query);
 
-  if (teamIds.length === 0) {
-    return res.status(200).json(
-      new ApiResponse(
-        200,
-        { prototypes: [], pagination: paginationOf(page, limit, 0) },
-        "You are not mentoring any team yet"
-      )
-    );
-  }
-
-  const filter = { team: { $in: teamIds }, reviewStatus: { $in: VISIBLE_STATUSES } };
+  const filter = { ...scope, reviewStatus: { $in: VISIBLE_STATUSES } };
 
   if (req.query.status) {
-    const status = String(req.query.status);
+    const status = String(req.query.status); 
     if (!VISIBLE_STATUSES.includes(status)) throw new ApiError(400, "Invalid status filter");
     filter.reviewStatus = status;
   }
@@ -256,23 +262,14 @@ const getAssignedPrototypes = asyncHandler(async (req, res) => {
   );
 });
 
+
 const getPrototypeEvaluationQueue = asyncHandler(async (req, res) => {
   requireUser(req);
 
-  const teamIds = await getMentoredTeamIds(req.user._id);
+  const scope = await reviewerScope(req.user._id);
   const { page, limit, skip } = parsePagination(req.query);
 
-  if (teamIds.length === 0) {
-    return res.status(200).json(
-      new ApiResponse(
-        200,
-        { queue: [], pagination: paginationOf(page, limit, 0) },
-        "You are not mentoring any team yet"
-      )
-    );
-  }
-
-  const filter = { team: { $in: teamIds }, reviewStatus: { $in: REVIEWABLE } };
+  const filter = { ...scope, reviewStatus: { $in: REVIEWABLE } };
 
   if (req.query.status) {
     const status = String(req.query.status);
@@ -334,7 +331,7 @@ const getPrototypeDetails = asyncHandler(async (req, res) => {
         ...prototype.toObject(),
         round,
         isResubmission: round > 1,
-        currentReview, // null until the first evaluation/comment is saved
+        currentReview, 
       },
       "Prototype details fetched successfully"
     )
@@ -381,6 +378,7 @@ const reviewPrototype = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { reviewStatus: "under_review", review }, "Review saved successfully"));
 });
 
+
 const approvePrototype = asyncHandler(async (req, res) => {
   const prototype = await loadAssignedPrototype(req);
   const feedback = cleanText(req.body.feedback, "Feedback");
@@ -391,6 +389,7 @@ const approvePrototype = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, decisionPayload(result), "Prototype approved successfully"));
 });
+
 
 const requestPrototypeChanges = asyncHandler(async (req, res) => {
   const prototype = await loadAssignedPrototype(req);
@@ -416,6 +415,7 @@ const requestPrototypeChanges = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, decisionPayload(result), "Changes requested successfully"));
 });
 
+
 const rejectPrototype = asyncHandler(async (req, res) => {
   const prototype = await loadAssignedPrototype(req);
   const reason = cleanText(req.body.reason ?? req.body.feedback, "Reason", { min: 10 });
@@ -426,6 +426,7 @@ const rejectPrototype = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, decisionPayload(result), "Prototype rejected"));
 });
+
 
 const addPrototypeReviewComments = asyncHandler(async (req, res) => {
   const prototype = await loadAssignedPrototype(req);
@@ -446,7 +447,7 @@ const addPrototypeReviewComments = asyncHandler(async (req, res) => {
   }
 
   review.comments.push({ author: req.user._id, text, section, visibleToTeam });
-  await review.save(); // schema enforces the 50-comment limit
+  await review.save();
 
   const added = review.comments[review.comments.length - 1];
 
@@ -565,7 +566,7 @@ const comparePrototypeVersions = asyncHandler(async (req, res) => {
       {
         from: meta(older),
         to: meta(prototype),
-        previousReview,
+        previousReview, 
         changes,
         unchanged,
         summary: `${Object.keys(changes).length} field(s) changed between v${older.version} and v${prototype.version}`,

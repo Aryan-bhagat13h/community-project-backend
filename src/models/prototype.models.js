@@ -98,6 +98,43 @@ const prototypeSchema = new Schema(
       maxlength: 2000,
       required: requiredOnSubmit("Testing results"),
     },
+    reviewerAssignedBy: { 
+      type: Schema.Types.ObjectId, 
+      ref: "User" 
+    },
+    reviewerAssignedAt: { 
+      type: Date 
+    },
+ 
+    // Moderation flag admin only
+    isFlagged: { type: Boolean, default: false },
+    flag: {
+      reason: {
+        type: String,
+        enum: ["inappropriate", "misleading", "suspicious", "plagiarism", "other"],
+      },
+      note: { type: String, trim: true, maxlength: 1000 },
+      flaggedBy: { type: Schema.Types.ObjectId, ref: "User" },
+      flaggedAt: { type: Date },
+    },
+    isRemoved: { 
+      type: Boolean, 
+      default: false 
+    },
+    removal: {
+      reason: { 
+        type: String, 
+        trim: true, 
+        maxlength: 1000 
+      },
+      removedBy: { 
+        type: Schema.Types.ObjectId, 
+        ref: "User" 
+      },
+      removedAt: { 
+        type: Date 
+      },
+    },
     reviewStatus: {
       type: String,
       enum: ["draft", "submitted", "under_review", "changes_requested", "approved", "rejected"],
@@ -150,6 +187,15 @@ prototypeSchema.pre("save", async function () {
     this.reviewedAt = new Date();
   }
 });
+const hideRemoved = function () {
+  if (this.getOptions().includeRemoved) return;
+  this.where({ isRemoved: { $ne: true } });
+};
+prototypeSchema.pre(/^find/, hideRemoved);
+prototypeSchema.pre("countDocuments", hideRemoved);
+ 
+prototypeSchema.index({ isRemoved: 1, reviewStatus: 1, submittedAt: 1 });
+prototypeSchema.index({ isFlagged: 1 });
 
 prototypeSchema.index({ project: 1, version: 1 }, { unique: true });
 prototypeSchema.index({ team: 1 });
