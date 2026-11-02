@@ -289,7 +289,29 @@ const getTestReport = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, report, "Test report fetched successfully"));
 });
 
-export { getTestReport };
 
-export { createTestReport, updateTestReport, deleteTestReport, getTestReport };
+const getMyTestReports = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  // All teams the user belongs to
+  const teams = await Team.find({
+    $or: [{ teamMembers: req.user._id }, { leader: req.user._id }],
+  }).select("_id");
+
+  const reports = await TestReport.find({
+    team: { $in: teams.map((t) => t._id) },
+    isDeleted: { $ne: true },
+  })
+    .select("title reviewStatus prototype totalTests passedTests failedTests submittedAt updatedAt")
+    .populate("prototype", "title version")
+    .sort({ updatedAt: -1 });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, reports, "Test reports fetched successfully"));
+});
+
+export { createTestReport, updateTestReport, deleteTestReport, getTestReport, getMyTestReports };
 
