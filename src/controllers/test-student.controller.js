@@ -249,7 +249,47 @@ const deleteTestReport = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, deleted, "Test report deleted successfully"));
 });
 
-export { deleteTestReport };
+const getTestReport = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
 
-export { createTestReport, updateTestReport };
+  const { testReportId } = req.params;
+  if (!mongoose.isValidObjectId(testReportId)) {
+    throw new ApiError(400, "Invalid test report id");
+  }
+
+  const report = await TestReport.findOne({
+    _id: testReportId,
+    isDeleted: { $ne: true },
+  })
+    .select("-__v -statusHistory -isDeleted -deletedAt -deletedBy -deleteReason -testEvidence.publicId")
+    .populate("team", "name leader teamMembers")
+    .populate("prototype", "title version reviewStatus")
+    .populate("project", "title name")
+    .populate("submittedBy", "fullname username")
+    .populate("reviewer", "fullname username");
+
+  if (!report) {
+    throw new ApiError(404, "Test report not found");
+  }
+
+  // Only members of the report's team can view it
+  const team = report.team;
+  const isMember =
+    team &&
+    (team.leader.equals(req.user._id) ||
+      team.teamMembers.some((id) => id.equals(req.user._id)));
+  if (!isMember) {
+    throw new ApiError(403, "Only team members can view this test report");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, report, "Test report fetched successfully"));
+});
+
+export { getTestReport };
+
+export { createTestReport, updateTestReport, deleteTestReport, getTestReport };
 
