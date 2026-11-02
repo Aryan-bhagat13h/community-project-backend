@@ -5,6 +5,8 @@ import { ApiResponse } from "../utils/api-response.js";
 import { Prototype } from "../models/prototype.models.js";
 import { Team } from "../models/team.models.js";
 import { TestReport } from "../models/test-report.models.js";
+import fs from "fs/promises";
+import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 
 const OPEN_STATUSES = ["draft", "submitted", "under_review", "changes_requested"];
 
@@ -313,5 +315,180 @@ const getMyTestReports = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, reports, "Test reports fetched successfully"));
 });
 
-export { createTestReport, updateTestReport, deleteTestReport, getTestReport, getMyTestReports };
+const EDITABLE_STATUSES = ["draft", "changes_requested"];
+const MAX_EVIDENCE = 10;
+
+const loadEditableReport = async (req) => {
+  const { testReportId } = req.params;
+  if (!mongoose.isValidObjectId(testReportId)) {
+    throw new ApiError(400, "Invalid test report id");
+  }
+
+  const report = await TestReport.findOne({
+    _id: testReportId,
+    isDeleted: { $ne: true },
+  }).select("team reviewStatus testEvidence");
+  if (!report) {
+    throw new ApiError(404, "Test report not found");
+  }
+
+  const team = await Team.findById(report.team).select("leader teamMembers");
+  const isMember =
+    team &&
+    (team.leader.equals(req.user._id) ||
+      team.teamMembers.some((id) => id.equals(req.user._id)));
+  if (!isMember) {
+    throw new ApiError(403, "Only team members can change test evidence");
+  }
+
+  if (!EDITABLE_STATUSES.includes(report.reviewStatus)) {
+    throw new ApiError(409, "Evidence can only be changed while the report is a draft or needs changes");
+  }
+
+  return report;
+};
+
+const uploadTestEvidence = asyncHandler(async (req, res) => {
+  const files = Array.isArray(req.files) ? req.files : [];
+  const uploaded = [];
+
+  try {
+    if (!req.user?._id) {
+      throw new ApiError(401, "Unauthorized access");
+    }
+    if (files.length === 0) {
+      throw new ApiError(400, "At least one file is required");
+    }
+
+    const report = await loadEditableReport(req);
+
+    if (report.testEvidence.length + files.length > MAX_EVIDENCE) {
+      throw new ApiError(400, `A test report can have at most ${MAX_EVIDENCE} evidence files`);
+    }
+
+    for (const file of files) {
+      const result = await uploadOnCloudinary(file.path);
+      const url = result?.secure_url || result?.url;
+      if (!url) {
+        throw new ApiError(500, "Error occurred while uploading a file");
+      }
+      uploaded.push({
+        url,
+        publicId: result.public_id,
+        resourceType: result.resource_type || "image",
+        name: file.originalname.slice(0, 100),
+      });
+    }
+
+    const updated = await TestReport.findOneAndUpdate(
+      {
+        _id: report._id,
+        reviewStatus: { $in: EDITABLE_STATUSES },
+        [`testEvidence.${MAX_EVIDENCE - uploaded.length}`]: { $exists: false },
+      },
+      { $push: { testEvidence: { $each: uploaded } } },
+      { new: true }
+    ).select("testEvidence");
+
+    if (!updated) {
+      throw new ApiError(409, "The report changed while uploading. Please try again");
+    }
+
+    return res
+      .status(201)
+      .json(new ApiResponse(201, updated.testEvidence, "Evidence uploaded successfully"));
+  } catch (err) {
+    await Promise.all(uploaded.map((u) => deleteFromCloudinary(u.publicId, u.resourceType)));
+    throw err;
+  } finally {
+    await Promise.all(files.map((f) => fs.unlink(f.path).catch(() => {})));
+  }
+});
+
+const deleteTestEvidence = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const { evidenceId } = req.params;
+  if (!mongoose.isValidObjectId(evidenceId)) {
+    throw new ApiError(400, "Invalid evidence id");
+  }
+
+  const report = await loadEditableReport(req);
+
+  const evidence = report.testEvidence.id(evidenceId);
+  if (!evidence) {
+    throw new ApiError(404, "Evidence not found");
+  }
+
+  if (report.reviewStatus !== "draft" && report.testEvidence.length === 1) {
+    throw new ApiError(409, "A submitted report needs at least one piece of evidence. Upload a new one first");
+  }
+
+  const updated = await TestReport.findOneAndUpdate(
+    { _id: report._id, reviewStatus: { $in: EDITABLE_STATUSES } },
+    { $pull: { testEvidence: { _id: evidenceId } } },
+    { new: true }
+  ).select("testEvidence");
+
+  if (!updated) {
+    throw new ApiError(409, "The report changed while deleting. Please try again");
+  }
+
+  await deleteFromCloudinary(evidence.publicId, evidence.resourceType);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updated.testEvidence, "Evidence deleted successfully"));
+});
+
+const submitTestReport = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const { testReportId } = req.params;
+  if (!mongoose.isValidObjectId(testReportId)) {
+    throw new ApiError(400, "Invalid test report id");
+  }
+
+  const report = await TestReport.findOne({
+    _id: testReportId,
+    isDeleted: { $ne: true },
+  });
+  if (!report) {
+    throw new ApiError(404, "Test report not found");
+  }
+
+  // Only team members can submit
+  const team = await Team.findById(report.team).select("leader teamMembers");
+  const isMember =
+    team &&
+    (team.leader.equals(req.user._id) ||
+      team.teamMembers.some((id) => id.equals(req.user._id)));
+  if (!isMember) {
+    throw new ApiError(403, "Only team members can submit test reports");
+  }
+
+  if (report.reviewStatus === "changes_requested") {
+    throw new ApiError(409, "Use the resubmit endpoint after making the requested changes");
+  }
+  if (report.reviewStatus !== "draft") {
+    throw new ApiError(409, "Only draft test reports can be submitted");
+  }
+
+  report.reviewStatus = "submitted";
+  report.statusHistory.push({ status: "submitted", by: req.user._id });
+
+  await report.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, report, "Test report submitted successfully"));
+});
+
+export { submitTestReport };
+
+export { createTestReport, updateTestReport, deleteTestReport, getTestReport, getMyTestReports, uploadTestEvidence, deleteTestEvidence };
 
