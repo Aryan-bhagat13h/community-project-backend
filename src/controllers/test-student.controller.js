@@ -182,5 +182,74 @@ const updateTestReport = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, report, "Test report updated successfully"));
 });
 
+const DELETABLE_STATUSES = ["draft", "changes_requested", "rejected"];
+
+const deleteTestReport = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const { testReportId } = req.params;
+  if (!mongoose.isValidObjectId(testReportId)) {
+    throw new ApiError(400, "Invalid test report id");
+  }
+
+  const reason = String(req.body.deleteReason ?? "").trim();
+  if (reason.length < 5) {
+    throw new ApiError(400, "Deletion reason is required (at least 5 characters)");
+  }
+  if (reason.length > 500) {
+    throw new ApiError(400, "Deletion reason cannot exceed 500 characters");
+  }
+
+  const report = await TestReport.findOne({
+    _id: testReportId,
+    isDeleted: { $ne: true },
+  }).select("team reviewStatus");
+  if (!report) {
+    throw new ApiError(404, "Test report not found");
+  }
+
+  // Only the team leader can delete
+  const team = await Team.findById(report.team).select("leader");
+  if (!team || !team.leader.equals(req.user._id)) {
+    throw new ApiError(403, "Only the team leader can delete test reports");
+  }
+
+  if (!DELETABLE_STATUSES.includes(report.reviewStatus)) {
+    throw new ApiError(
+      409,
+      `A test report cannot be deleted while it is ${report.reviewStatus.replace(/_/g, " ")}`
+    );
+  }
+
+  const deleted = await TestReport.findOneAndUpdate(
+    {
+      _id: report._id,
+      isDeleted: { $ne: true },
+      reviewStatus: { $in: DELETABLE_STATUSES },
+    },
+    {
+      $set: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user._id,
+        deleteReason: reason,
+      },
+    },
+    { new: true }
+  ).select("title isDeleted deletedAt");
+
+  if (!deleted) {
+    throw new ApiError(409, "The test report changed while deleting. Please try again");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, deleted, "Test report deleted successfully"));
+});
+
+export { deleteTestReport };
+
 export { createTestReport, updateTestReport };
 

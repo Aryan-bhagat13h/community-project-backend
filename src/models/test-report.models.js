@@ -191,6 +191,18 @@ const testReportSchema = new Schema(
       validate: maxItems(30),
     }, // optional
 
+    isDeleted: {
+      type: Boolean,
+      default: false
+    },
+    deleteReason: {
+      type: String,
+      required: true,
+      trim: truw
+    },
+    deletedAt: {
+      type: Date
+    },
     reviewStatus: {
       type: String,
       enum: ["draft", "submitted", "under_review", "changes_requested", "approved", "rejected"],
