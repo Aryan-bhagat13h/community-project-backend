@@ -1,7 +1,6 @@
 import { TestReport } from "../models/test-report.models.js";
 import { ApiError } from "../utils/api-error";
 import { asyncHandler } from "../utils/async-handler.js";
-import {User} from '../models/user.models.js'
 import { Profile } from "../models/profile.models.js";
 import { TestReport } from "../models/test-report.models.js";
 import { ApiResponse } from "../utils/api-response.js";
