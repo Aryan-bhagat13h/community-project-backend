@@ -5,6 +5,7 @@ import { ApiResponse } from "../utils/api-response.js";
 import { Prototype } from "../models/prototype.models.js";
 import { Team } from "../models/team.models.js";
 import { TestReport } from "../models/test-report.models.js";
+import {TestReview} from '../models/test-review.models.js'
 import fs from "fs/promises";
 import { uploadOnCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 
@@ -191,7 +192,7 @@ const deleteTestReport = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Unauthorized access");
   }
 
-  const { testReportId } = req.params;
+const { testReportId } = req.params;
   if (!mongoose.isValidObjectId(testReportId)) {
     throw new ApiError(400, "Invalid test report id");
   }
@@ -488,7 +489,104 @@ const submitTestReport = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, report, "Test report submitted successfully"));
 });
 
-export { submitTestReport };
+const reSubmitTestReport = asyncHandler(async(req,res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
 
-export { createTestReport, updateTestReport, deleteTestReport, getTestReport, getMyTestReports, uploadTestEvidence, deleteTestEvidence };
+  const { testReportId } = req.params;
+  if (!mongoose.isValidObjectId(testReportId)) {
+    throw new ApiError(400, "Invalid test report id");
+  }
+
+  const report = await TestReport.findOne({
+    _id: testReportId,
+    isDeleted: { $ne: true },
+  });
+  if (!report) {
+    throw new ApiError(404, "Test report not found");
+  }
+
+  // Only team members can submit
+  const team = await Team.findById(report.team).select("leader teamMembers");
+  const isMember =
+    team &&
+    (team.leader.equals(req.user._id) ||
+      team.teamMembers.some((id) => id.equals(req.user._id)));
+  if (!isMember) {
+    throw new ApiError(403, "Only team members can submit test reports");
+  }
+
+  if (report.reviewStatus === "changes_requested") {
+    throw new ApiError(409, "Use the resubmit endpoint after making the requested changes");
+  }
+  if (report.reviewStatus !== "draft") {
+    throw new ApiError(409, "Only draft test reports can be submitted");
+  }
+
+  report.reviewStatus = "submitted";
+  report.statusHistory.push({ status: "submitted", by: req.user._id });
+
+  await report.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, report, "Test report submitted successfully"));
+})
+
+const getTestFeedback = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const { testReportId } = req.params;
+  if (!mongoose.isValidObjectId(testReportId)) {
+    throw new ApiError(400, "Invalid test report id");
+  }
+
+  const report = await TestReport.findOne({
+    _id: testReportId,
+    isDeleted: { $ne: true },
+  }).select("title team reviewStatus reviewFeedback reviewedAt");
+  if (!report) {
+    throw new ApiError(404, "Test report not found");
+  }
+
+  // Only team members can see the feedback
+  const team = await Team.findById(report.team).select("leader teamMembers");
+  const isMember =
+    team &&
+    (team.leader.equals(req.user._id) ||
+      team.teamMembers.some((id) => id.equals(req.user._id)));
+  if (!isMember) {
+    throw new ApiError(403, "Only team members can view this feedback");
+  }
+
+  const reviews = await TestReview.find({ testReport: report._id })
+    .select(
+      "round decision testingMethodScore testCoverageScore resultAccuracyScore evidenceScore overallScore feedback suggestions requiredChanges reviewedAt reviewer"
+    )
+    .populate("reviewer", "fullname username")
+    .sort({ round: -1 });
+
+  const [latestReview, ...previousReviews] = reviews;
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        title: report.title,
+        reviewStatus: report.reviewStatus,
+        requiresChanges: report.reviewStatus === "changes_requested",
+        summaryFeedback: report.reviewFeedback || null,
+        latestReview: latestReview || null,
+        previousReviews,
+      },
+      reviews.length ? "Feedback fetched successfully" : "No feedback has been given yet"
+    )
+  );
+});
+
+
+export { createTestReport, updateTestReport, deleteTestReport, getTestReport, getMyTestReports, uploadTestEvidence, deleteTestEvidence, submitTestReport, reSubmitTestReport, getTestFeedback };
 
